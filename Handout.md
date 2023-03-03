@@ -55,6 +55,11 @@ You can already use Konata to visualize the execution of the baseline multicycle
 Once you will have implemented your pipelined processor successfully, the Konata visualization should look like:
 <img src="Pipelined.png" alt="Multicycle in Konata" width=600>
 
+To use Konata, you will have to generate event in each of the rule of your design. You can study `multicycle.bsv` as an example.  
+In the skeleton code of `pipelined.bsv` we also gave some sketch of how to generate those events.
+
+_Remark:_ With those event created, the testbench output large log, put in `output.log`. Those log can grow quickly, so you should not let a processor that does not complete a benchmark run for too long (no more than 60 seconds). This is the reason why we use the timeout command in the previous paragraph.
+
 ## Disassembled files
 
 All the tests are written in C, you can find the source in "test/src/*.c".
