@@ -4,42 +4,300 @@ Method schedule
 ---------------
 Method: getIReq
 Ready signal: toImem_rv.port1__read[68]
-Conflict-free: getIResp, getDReq, getDResp, getMMIOReq, getMMIOResp
+Conflict-free: getDReq, getMMIOReq
+Sequenced after (restricted): getIResp, getDResp, getMMIOResp
 Conflicts: getIReq
  
 Method: getIResp
 Ready signal: ! fromImem_rv.port0__read[68]
-Conflict-free: getIReq, getDReq, getDResp, getMMIOReq, getMMIOResp
+Conflict-free: getDReq, getDResp, getMMIOReq, getMMIOResp
+Sequenced before (restricted): getIReq
 Conflicts: getIResp
  
 Method: getDReq
 Ready signal: toDmem_rv.port1__read[68]
-Conflict-free: getIReq, getIResp, getDResp, getMMIOReq, getMMIOResp
+Conflict-free: getIReq, getIResp, getMMIOReq
+Sequenced after (restricted): getDResp, getMMIOResp
 Conflicts: getDReq
  
 Method: getDResp
 Ready signal: ! fromDmem_rv.port0__read[68]
-Conflict-free: getIReq, getIResp, getDReq, getMMIOReq, getMMIOResp
+Conflict-free: getIResp, getMMIOResp
+Sequenced before (restricted): getIReq, getDReq, getMMIOReq
 Conflicts: getDResp
  
 Method: getMMIOReq
 Ready signal: toMMIO_rv.port1__read[68]
-Conflict-free: getIReq, getIResp, getDReq, getDResp, getMMIOResp
+Conflict-free: getIReq, getIResp, getDReq
+Sequenced after (restricted): getDResp, getMMIOResp
 Conflicts: getMMIOReq
  
 Method: getMMIOResp
 Ready signal: ! fromMMIO_rv.port0__read[68]
-Conflict-free: getIReq, getIResp, getDReq, getDResp, getMMIOReq
+Conflict-free: getIResp, getDResp
+Sequenced before (restricted): getIReq, getDReq, getMMIOReq
 Conflicts: getMMIOResp
  
 Rule schedule
 -------------
+Rule: pc_canonicalize
+Predicate: True
+Blocking rules: (none)
+ 
 Rule: do_tic_logging
 Predicate: True
 Blocking rules: (none)
  
 Rule: fetch
-Predicate: ! starting
+Predicate: (! toImem_rv.port0__read[68]) &&
+	   (! f2dQueue_rv.port1__read[113]) &&
+	   (! starting)
+Blocking rules: execute
+ 
+Rule: decode
+Predicate: f2dQueue_rv.port0__read[113] &&
+	   fromImem_rv.port1__read[68] &&
+	   ((! (PrimArrayDynSelect (PrimBuildArray (! scoreboard_0)
+						   (! scoreboard_1)
+						   (! scoreboard_2)
+						   (! scoreboard_3)
+						   (! scoreboard_4)
+						   (! scoreboard_5)
+						   (! scoreboard_6)
+						   (! scoreboard_7)
+						   (! scoreboard_8)
+						   (! scoreboard_9)
+						   (! scoreboard_10)
+						   (! scoreboard_11)
+						   (! scoreboard_12)
+						   (! scoreboard_13)
+						   (! scoreboard_14)
+						   (! scoreboard_15)
+						   (! scoreboard_16)
+						   (! scoreboard_17)
+						   (! scoreboard_18)
+						   (! scoreboard_19)
+						   (! scoreboard_20)
+						   (! scoreboard_21)
+						   (! scoreboard_22)
+						   (! scoreboard_23)
+						   (! scoreboard_24)
+						   (! scoreboard_25)
+						   (! scoreboard_26)
+						   (! scoreboard_27)
+						   (! scoreboard_28)
+						   (! scoreboard_29)
+						   (! scoreboard_30)
+						   (! scoreboard_31))
+				   fromImem_rv.port1__read[19:15])) ||
+	    (! (PrimArrayDynSelect (PrimBuildArray (! scoreboard_0)
+						   (! scoreboard_1)
+						   (! scoreboard_2)
+						   (! scoreboard_3)
+						   (! scoreboard_4)
+						   (! scoreboard_5)
+						   (! scoreboard_6)
+						   (! scoreboard_7)
+						   (! scoreboard_8)
+						   (! scoreboard_9)
+						   (! scoreboard_10)
+						   (! scoreboard_11)
+						   (! scoreboard_12)
+						   (! scoreboard_13)
+						   (! scoreboard_14)
+						   (! scoreboard_15)
+						   (! scoreboard_16)
+						   (! scoreboard_17)
+						   (! scoreboard_18)
+						   (! scoreboard_19)
+						   (! scoreboard_20)
+						   (! scoreboard_21)
+						   (! scoreboard_22)
+						   (! scoreboard_23)
+						   (! scoreboard_24)
+						   (! scoreboard_25)
+						   (! scoreboard_26)
+						   (! scoreboard_27)
+						   (! scoreboard_28)
+						   (! scoreboard_29)
+						   (! scoreboard_30)
+						   (! scoreboard_31))
+				   fromImem_rv.port1__read[24:20])) ||
+	    (! (PrimArrayDynSelect (PrimBuildArray (! scoreboard_0)
+						   (! scoreboard_1)
+						   (! scoreboard_2)
+						   (! scoreboard_3)
+						   (! scoreboard_4)
+						   (! scoreboard_5)
+						   (! scoreboard_6)
+						   (! scoreboard_7)
+						   (! scoreboard_8)
+						   (! scoreboard_9)
+						   (! scoreboard_10)
+						   (! scoreboard_11)
+						   (! scoreboard_12)
+						   (! scoreboard_13)
+						   (! scoreboard_14)
+						   (! scoreboard_15)
+						   (! scoreboard_16)
+						   (! scoreboard_17)
+						   (! scoreboard_18)
+						   (! scoreboard_19)
+						   (! scoreboard_20)
+						   (! scoreboard_21)
+						   (! scoreboard_22)
+						   (! scoreboard_23)
+						   (! scoreboard_24)
+						   (! scoreboard_25)
+						   (! scoreboard_26)
+						   (! scoreboard_27)
+						   (! scoreboard_28)
+						   (! scoreboard_29)
+						   (! scoreboard_30)
+						   (! scoreboard_31))
+				   fromImem_rv.port1__read[11:7])) ||
+	    (! d2eQueue_rv.port1__read[217])) &&
+	   (! starting)
+Blocking rules: execute, writeback
+ 
+Rule: execute
+Predicate: d2eQueue_rv.port0__read[217] &&
+	   (! e2wQueue_rv.port1__read[127]) &&
+	   ((d2eQueue_rv.port0__read[112] == epoch)
+	    ? d2eQueue_rv.port0__read[183] ||
+	      (! (d2eQueue_rv.port0__read[181:180] == 2'b0)) ||
+	      ((((d2eQueue_rv.port0__read[111:80] +
+		  ((d2eQueue_rv.port0__read[212] &&
+		    ((d2eQueue_rv.port0__read[212]
+		      ? d2eQueue_rv.port0__read[211:209]
+		      : (_ :: Bit 3)) ==
+		     3'd0))
+		   ? sext d2eQueue_rv.port0__read[208:197]
+		   : ((d2eQueue_rv.port0__read[212] &&
+		       ((d2eQueue_rv.port0__read[212]
+			 ? d2eQueue_rv.port0__read[211:209]
+			 : (_ :: Bit 3)) ==
+			3'd1))
+		      ? sext {d2eQueue_rv.port0__read[208:202], d2eQueue_rv.port0__read[188:184]}
+		      : ((d2eQueue_rv.port0__read[212] &&
+			  ((d2eQueue_rv.port0__read[212]
+			    ? d2eQueue_rv.port0__read[211:209]
+			    : (_ :: Bit 3)) ==
+			   3'd2))
+			 ? sext {d2eQueue_rv.port0__read[208], d2eQueue_rv.port0__read[184], d2eQueue_rv.port0__read[207:202], d2eQueue_rv.port0__read[188:185], 1'b0}
+			 : ((d2eQueue_rv.port0__read[212] &&
+			     ((d2eQueue_rv.port0__read[212]
+			       ? d2eQueue_rv.port0__read[211:209]
+			       : (_ :: Bit 3)) ==
+			      3'd3))
+			    ? {d2eQueue_rv.port0__read[208:189], 12'b0}
+			    : ((d2eQueue_rv.port0__read[212] &&
+				((d2eQueue_rv.port0__read[212]
+				  ? d2eQueue_rv.port0__read[211:209]
+				  : (_ :: Bit 3)) ==
+				 3'd4))
+			       ? sext {d2eQueue_rv.port0__read[208], d2eQueue_rv.port0__read[196:189], d2eQueue_rv.port0__read[197], d2eQueue_rv.port0__read[207:198], 1'b0}
+			       : 32'd0))))))[31:2] ==
+		 30'd1006649340) ||
+		((d2eQueue_rv.port0__read[111:80] +
+		  ((d2eQueue_rv.port0__read[212] &&
+		    ((d2eQueue_rv.port0__read[212]
+		      ? d2eQueue_rv.port0__read[211:209]
+		      : (_ :: Bit 3)) ==
+		     3'd0))
+		   ? sext d2eQueue_rv.port0__read[208:197]
+		   : ((d2eQueue_rv.port0__read[212] &&
+		       ((d2eQueue_rv.port0__read[212]
+			 ? d2eQueue_rv.port0__read[211:209]
+			 : (_ :: Bit 3)) ==
+			3'd1))
+		      ? sext {d2eQueue_rv.port0__read[208:202], d2eQueue_rv.port0__read[188:184]}
+		      : ((d2eQueue_rv.port0__read[212] &&
+			  ((d2eQueue_rv.port0__read[212]
+			    ? d2eQueue_rv.port0__read[211:209]
+			    : (_ :: Bit 3)) ==
+			   3'd2))
+			 ? sext {d2eQueue_rv.port0__read[208], d2eQueue_rv.port0__read[184], d2eQueue_rv.port0__read[207:202], d2eQueue_rv.port0__read[188:185], 1'b0}
+			 : ((d2eQueue_rv.port0__read[212] &&
+			     ((d2eQueue_rv.port0__read[212]
+			       ? d2eQueue_rv.port0__read[211:209]
+			       : (_ :: Bit 3)) ==
+			      3'd3))
+			    ? {d2eQueue_rv.port0__read[208:189], 12'b0}
+			    : ((d2eQueue_rv.port0__read[212] &&
+				((d2eQueue_rv_port0__read____d461(...)[212]
+				  ? d2eQueue_rv_port0__read____d461(...)[211:209]
+				  : (_ :: Bit 3)) ==
+				 3'd4))
+			       ? sext {d2eQueue_rv.port0__read[208], d2eQueue_rv.port0__read[196:189], d2eQueue_rv_port0__read____d461(...)[197], d2eQueue_rv_port0__read____d461(...)[207:198], 1'b0}
+			       : 32'd0))))))[31:2] ==
+		 30'd1006649341) ||
+		((d2eQueue_rv.port0__read[111:80] +
+		  ((d2eQueue_rv.port0__read[212] &&
+		    ((d2eQueue_rv.port0__read[212]
+		      ? d2eQueue_rv.port0__read[211:209]
+		      : (_ :: Bit 3)) ==
+		     3'd0))
+		   ? sext d2eQueue_rv.port0__read[208:197]
+		   : ((d2eQueue_rv.port0__read[212] &&
+		       ((d2eQueue_rv.port0__read[212]
+			 ? d2eQueue_rv.port0__read[211:209]
+			 : (_ :: Bit 3)) ==
+			3'd1))
+		      ? sext {d2eQueue_rv.port0__read[208:202], d2eQueue_rv.port0__read[188:184]}
+		      : ((d2eQueue_rv.port0__read[212] &&
+			  ((d2eQueue_rv.port0__read[212]
+			    ? d2eQueue_rv.port0__read[211:209]
+			    : (_ :: Bit 3)) ==
+			   3'd2))
+			 ? sext {d2eQueue_rv.port0__read[208], d2eQueue_rv.port0__read[184], d2eQueue_rv.port0__read[207:202], d2eQueue_rv.port0__read[188:185], 1'b0}
+			 : ((d2eQueue_rv.port0__read[212] &&
+			     ((d2eQueue_rv.port0__read[212]
+			       ? d2eQueue_rv.port0__read[211:209]
+			       : (_ :: Bit 3)) ==
+			      3'd3))
+			    ? {d2eQueue_rv.port0__read[208:189], 12'b0}
+			    : ((d2eQueue_rv.port0__read[212] &&
+				((d2eQueue_rv_port0__read____d461(...)[212]
+				  ? d2eQueue_rv_port0__read____d461(...)[211:209]
+				  : (_ :: Bit 3)) ==
+				 3'd4))
+			       ? sext {d2eQueue_rv.port0__read[208], d2eQueue_rv.port0__read[196:189], d2eQueue_rv_port0__read____d461(...)[197], d2eQueue_rv_port0__read____d461(...)[207:198], 1'b0}
+			       : 32'd0))))))[31:2] ==
+		 30'd1006649342))
+	       ? ! toMMIO_rv.port0__read[68]
+	       : (! toDmem_rv.port0__read[68]))
+	    : squashed.i_notFull) &&
+	   (! starting)
+Blocking rules: (none)
+ 
+Rule: writeback
+Predicate: e2wQueue_rv.port0__read[127] &&
+	   retired.i_notFull &&
+	   ((! e2wQueue_rv.port0__read[0]) ||
+	    e2wQueue_rv.port0__read[55] ||
+	    (! (e2wQueue_rv.port0__read[53:52] == 2'b0)) ||
+	    ((e2wQueue_rv.port0__read[127] && e2wQueue_rv.port0__read[121])
+	     ? fromMMIO_rv.port1__read[68]
+	     : fromDmem_rv.port1__read[68])) &&
+	   ((! e2wQueue_rv.port0__read[85]) ||
+	    (e2wQueue_rv.port0__read[60:56] == 5'd0) ||
+	    (! e2wQueue_rv.port0__read[0]) ||
+	    e2wQueue_rv.port0__read[55] ||
+	    (! (e2wQueue_rv.port0__read[53:52] == 2'b0)) ||
+	    (((e2wQueue_rv.port0__read[126:124] == 3'b0) ||
+	      (e2wQueue_rv.port0__read[126:124] == 3'b1) ||
+	      (e2wQueue_rv.port0__read[126:124] == 3'b100) ||
+	      (e2wQueue_rv.port0__read[126:124] == 3'b101))
+	     ? (e2wQueue_rv.port0__read[127] && e2wQueue_rv.port0__read[121])
+	       ? fromMMIO_rv.port1__read[68]
+	       : fromDmem_rv.port1__read[68]
+	     : ((! (e2wQueue_rv.port0__read[126:124] == 3'b10)) ||
+		((e2wQueue_rv.port0__read[127] &&
+		  e2wQueue_rv.port0__read[121])
+		 ? fromMMIO_rv.port1__read[68]
+		 : fromDmem_rv.port1__read[68])))) &&
+	   (! starting)
 Blocking rules: (none)
  
 Rule: administrative_konata_commit
@@ -50,15 +308,19 @@ Rule: administrative_konata_flush
 Predicate: squashed.i_notEmpty
 Blocking rules: (none)
  
-Logical execution order: getIReq,
-			 getIResp,
-			 getDReq,
+Logical execution order: getIResp,
 			 getDResp,
-			 getMMIOReq,
 			 getMMIOResp,
+			 writeback,
+			 execute,
+			 getDReq,
+			 getMMIOReq,
+			 decode,
 			 fetch,
+			 getIReq,
 			 administrative_konata_commit,
 			 administrative_konata_flush,
-			 do_tic_logging
+			 do_tic_logging,
+			 pc_canonicalize
 
 ===========================================

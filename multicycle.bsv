@@ -191,7 +191,7 @@ module mkmulticycle(RVIfc);
 	    end
 		if (dInst.valid_rd) begin
             let rd_idx = fields.rd;
-            if (rd_idx != 0) begin rf[rd_idx] <=data; end
+            if (rd_idx != 0) begin rf[rd_idx] <= data; end
 		end
     endrule
 
