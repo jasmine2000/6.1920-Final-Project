@@ -1,0 +1,64 @@
+=== Generated schedule for mkpipelined ===
+
+Method schedule
+---------------
+Method: getIReq
+Ready signal: toImem_rv.port1__read[68]
+Conflict-free: getIResp, getDReq, getDResp, getMMIOReq, getMMIOResp
+Conflicts: getIReq
+ 
+Method: getIResp
+Ready signal: ! fromImem_rv.port0__read[68]
+Conflict-free: getIReq, getDReq, getDResp, getMMIOReq, getMMIOResp
+Conflicts: getIResp
+ 
+Method: getDReq
+Ready signal: toDmem_rv.port1__read[68]
+Conflict-free: getIReq, getIResp, getDResp, getMMIOReq, getMMIOResp
+Conflicts: getDReq
+ 
+Method: getDResp
+Ready signal: ! fromDmem_rv.port0__read[68]
+Conflict-free: getIReq, getIResp, getDReq, getMMIOReq, getMMIOResp
+Conflicts: getDResp
+ 
+Method: getMMIOReq
+Ready signal: toMMIO_rv.port1__read[68]
+Conflict-free: getIReq, getIResp, getDReq, getDResp, getMMIOResp
+Conflicts: getMMIOReq
+ 
+Method: getMMIOResp
+Ready signal: ! fromMMIO_rv.port0__read[68]
+Conflict-free: getIReq, getIResp, getDReq, getDResp, getMMIOReq
+Conflicts: getMMIOResp
+ 
+Rule schedule
+-------------
+Rule: do_tic_logging
+Predicate: True
+Blocking rules: (none)
+ 
+Rule: fetch
+Predicate: ! starting
+Blocking rules: (none)
+ 
+Rule: administrative_konata_commit
+Predicate: retired.i_notEmpty
+Blocking rules: (none)
+ 
+Rule: administrative_konata_flush
+Predicate: squashed.i_notEmpty
+Blocking rules: (none)
+ 
+Logical execution order: getIReq,
+			 getIResp,
+			 getDReq,
+			 getDResp,
+			 getMMIOReq,
+			 getMMIOResp,
+			 fetch,
+			 administrative_konata_commit,
+			 administrative_konata_flush,
+			 do_tic_logging
+
+===========================================

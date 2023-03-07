@@ -1,0 +1,703 @@
+Kanata	0004
+C=	1
+I	              0	              0	  0
+S	              0	          0	F
+L	              0	          0	PC : 00000000
+C	1
+S	              0	          0	D
+L	              0	          0	Instr bits: 00000093
+L	              0	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	              0	          0	E
+L	              0	          0	 Standard instr 
+L	              0	          0	 ALU output: 00000000
+C	1
+S	              0	          0	W
+C	1
+I	              1	              1	  0
+S	              1	          0	F
+L	              1	          0	PC : 00000004
+R	              0	              0	          0
+C	1
+S	              1	          0	D
+L	              1	          0	Instr bits: 00000113
+L	              1	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	              1	          0	E
+L	              1	          0	 Standard instr 
+L	              1	          0	 ALU output: 00000000
+C	1
+S	              1	          0	W
+C	1
+I	              2	              2	  0
+S	              2	          0	F
+L	              2	          0	PC : 00000008
+R	              1	              1	          0
+C	1
+S	              2	          0	D
+L	              2	          0	Instr bits: 00000193
+L	              2	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	              2	          0	E
+L	              2	          0	 Standard instr 
+L	              2	          0	 ALU output: 00000000
+C	1
+S	              2	          0	W
+C	1
+I	              3	              3	  0
+S	              3	          0	F
+L	              3	          0	PC : 0000000c
+R	              2	              2	          0
+C	1
+S	              3	          0	D
+L	              3	          0	Instr bits: 00000213
+L	              3	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	              3	          0	E
+L	              3	          0	 Standard instr 
+L	              3	          0	 ALU output: 00000000
+C	1
+S	              3	          0	W
+C	1
+I	              4	              4	  0
+S	              4	          0	F
+L	              4	          0	PC : 00000010
+R	              3	              3	          0
+C	1
+S	              4	          0	D
+L	              4	          0	Instr bits: 00000293
+L	              4	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	              4	          0	E
+L	              4	          0	 Standard instr 
+L	              4	          0	 ALU output: 00000000
+C	1
+S	              4	          0	W
+C	1
+I	              5	              5	  0
+S	              5	          0	F
+L	              5	          0	PC : 00000014
+R	              4	              4	          0
+C	1
+S	              5	          0	D
+L	              5	          0	Instr bits: 00000313
+L	              5	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	              5	          0	E
+L	              5	          0	 Standard instr 
+L	              5	          0	 ALU output: 00000000
+C	1
+S	              5	          0	W
+C	1
+I	              6	              6	  0
+S	              6	          0	F
+L	              6	          0	PC : 00000018
+R	              5	              5	          0
+C	1
+S	              6	          0	D
+L	              6	          0	Instr bits: 00000393
+L	              6	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	              6	          0	E
+L	              6	          0	 Standard instr 
+L	              6	          0	 ALU output: 00000000
+C	1
+S	              6	          0	W
+C	1
+I	              7	              7	  0
+S	              7	          0	F
+L	              7	          0	PC : 0000001c
+R	              6	              6	          0
+C	1
+S	              7	          0	D
+L	              7	          0	Instr bits: 00000413
+L	              7	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	              7	          0	E
+L	              7	          0	 Standard instr 
+L	              7	          0	 ALU output: 00000000
+C	1
+S	              7	          0	W
+C	1
+I	              8	              8	  0
+S	              8	          0	F
+L	              8	          0	PC : 00000020
+R	              7	              7	          0
+C	1
+S	              8	          0	D
+L	              8	          0	Instr bits: 00000493
+L	              8	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	              8	          0	E
+L	              8	          0	 Standard instr 
+L	              8	          0	 ALU output: 00000000
+C	1
+S	              8	          0	W
+C	1
+I	              9	              9	  0
+S	              9	          0	F
+L	              9	          0	PC : 00000024
+R	              8	              8	          0
+C	1
+S	              9	          0	D
+L	              9	          0	Instr bits: 00000513
+L	              9	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	              9	          0	E
+L	              9	          0	 Standard instr 
+L	              9	          0	 ALU output: 00000000
+C	1
+S	              9	          0	W
+C	1
+I	             10	             10	  0
+S	             10	          0	F
+L	             10	          0	PC : 00000028
+R	              9	              9	          0
+C	1
+S	             10	          0	D
+L	             10	          0	Instr bits: 00000593
+L	             10	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	             10	          0	E
+L	             10	          0	 Standard instr 
+L	             10	          0	 ALU output: 00000000
+C	1
+S	             10	          0	W
+C	1
+I	             11	             11	  0
+S	             11	          0	F
+L	             11	          0	PC : 0000002c
+R	             10	             10	          0
+C	1
+S	             11	          0	D
+L	             11	          0	Instr bits: 00000613
+L	             11	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	             11	          0	E
+L	             11	          0	 Standard instr 
+L	             11	          0	 ALU output: 00000000
+C	1
+S	             11	          0	W
+C	1
+I	             12	             12	  0
+S	             12	          0	F
+L	             12	          0	PC : 00000030
+R	             11	             11	          0
+C	1
+S	             12	          0	D
+L	             12	          0	Instr bits: 00000693
+L	             12	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	             12	          0	E
+L	             12	          0	 Standard instr 
+L	             12	          0	 ALU output: 00000000
+C	1
+S	             12	          0	W
+C	1
+I	             13	             13	  0
+S	             13	          0	F
+L	             13	          0	PC : 00000034
+R	             12	             12	          0
+C	1
+S	             13	          0	D
+L	             13	          0	Instr bits: 00000713
+L	             13	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	             13	          0	E
+L	             13	          0	 Standard instr 
+L	             13	          0	 ALU output: 00000000
+C	1
+S	             13	          0	W
+C	1
+I	             14	             14	  0
+S	             14	          0	F
+L	             14	          0	PC : 00000038
+R	             13	             13	          0
+C	1
+S	             14	          0	D
+L	             14	          0	Instr bits: 00000793
+L	             14	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	             14	          0	E
+L	             14	          0	 Standard instr 
+L	             14	          0	 ALU output: 00000000
+C	1
+S	             14	          0	W
+C	1
+I	             15	             15	  0
+S	             15	          0	F
+L	             15	          0	PC : 0000003c
+R	             14	             14	          0
+C	1
+S	             15	          0	D
+L	             15	          0	Instr bits: 00000813
+L	             15	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	             15	          0	E
+L	             15	          0	 Standard instr 
+L	             15	          0	 ALU output: 00000000
+C	1
+S	             15	          0	W
+C	1
+I	             16	             16	  0
+S	             16	          0	F
+L	             16	          0	PC : 00000040
+R	             15	             15	          0
+C	1
+S	             16	          0	D
+L	             16	          0	Instr bits: 00000893
+L	             16	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	             16	          0	E
+L	             16	          0	 Standard instr 
+L	             16	          0	 ALU output: 00000000
+C	1
+S	             16	          0	W
+C	1
+I	             17	             17	  0
+S	             17	          0	F
+L	             17	          0	PC : 00000044
+R	             16	             16	          0
+C	1
+S	             17	          0	D
+L	             17	          0	Instr bits: 00000913
+L	             17	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	             17	          0	E
+L	             17	          0	 Standard instr 
+L	             17	          0	 ALU output: 00000000
+C	1
+S	             17	          0	W
+C	1
+I	             18	             18	  0
+S	             18	          0	F
+L	             18	          0	PC : 00000048
+R	             17	             17	          0
+C	1
+S	             18	          0	D
+L	             18	          0	Instr bits: 00000993
+L	             18	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	             18	          0	E
+L	             18	          0	 Standard instr 
+L	             18	          0	 ALU output: 00000000
+C	1
+S	             18	          0	W
+C	1
+I	             19	             19	  0
+S	             19	          0	F
+L	             19	          0	PC : 0000004c
+R	             18	             18	          0
+C	1
+S	             19	          0	D
+L	             19	          0	Instr bits: 00000a13
+L	             19	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	             19	          0	E
+L	             19	          0	 Standard instr 
+L	             19	          0	 ALU output: 00000000
+C	1
+S	             19	          0	W
+C	1
+I	             20	             20	  0
+S	             20	          0	F
+L	             20	          0	PC : 00000050
+R	             19	             19	          0
+C	1
+S	             20	          0	D
+L	             20	          0	Instr bits: 00000a93
+L	             20	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	             20	          0	E
+L	             20	          0	 Standard instr 
+L	             20	          0	 ALU output: 00000000
+C	1
+S	             20	          0	W
+C	1
+I	             21	             21	  0
+S	             21	          0	F
+L	             21	          0	PC : 00000054
+R	             20	             20	          0
+C	1
+S	             21	          0	D
+L	             21	          0	Instr bits: 00000b13
+L	             21	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	             21	          0	E
+L	             21	          0	 Standard instr 
+L	             21	          0	 ALU output: 00000000
+C	1
+S	             21	          0	W
+C	1
+I	             22	             22	  0
+S	             22	          0	F
+L	             22	          0	PC : 00000058
+R	             21	             21	          0
+C	1
+S	             22	          0	D
+L	             22	          0	Instr bits: 00000b93
+L	             22	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	             22	          0	E
+L	             22	          0	 Standard instr 
+L	             22	          0	 ALU output: 00000000
+C	1
+S	             22	          0	W
+C	1
+I	             23	             23	  0
+S	             23	          0	F
+L	             23	          0	PC : 0000005c
+R	             22	             22	          0
+C	1
+S	             23	          0	D
+L	             23	          0	Instr bits: 00000c13
+L	             23	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	             23	          0	E
+L	             23	          0	 Standard instr 
+L	             23	          0	 ALU output: 00000000
+C	1
+S	             23	          0	W
+C	1
+I	             24	             24	  0
+S	             24	          0	F
+L	             24	          0	PC : 00000060
+R	             23	             23	          0
+C	1
+S	             24	          0	D
+L	             24	          0	Instr bits: 00000c93
+L	             24	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	             24	          0	E
+L	             24	          0	 Standard instr 
+L	             24	          0	 ALU output: 00000000
+C	1
+S	             24	          0	W
+C	1
+I	             25	             25	  0
+S	             25	          0	F
+L	             25	          0	PC : 00000064
+R	             24	             24	          0
+C	1
+S	             25	          0	D
+L	             25	          0	Instr bits: 00000d13
+L	             25	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	             25	          0	E
+L	             25	          0	 Standard instr 
+L	             25	          0	 ALU output: 00000000
+C	1
+S	             25	          0	W
+C	1
+I	             26	             26	  0
+S	             26	          0	F
+L	             26	          0	PC : 00000068
+R	             25	             25	          0
+C	1
+S	             26	          0	D
+L	             26	          0	Instr bits: 00000d93
+L	             26	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	             26	          0	E
+L	             26	          0	 Standard instr 
+L	             26	          0	 ALU output: 00000000
+C	1
+S	             26	          0	W
+C	1
+I	             27	             27	  0
+S	             27	          0	F
+L	             27	          0	PC : 0000006c
+R	             26	             26	          0
+C	1
+S	             27	          0	D
+L	             27	          0	Instr bits: 00000e13
+L	             27	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	             27	          0	E
+L	             27	          0	 Standard instr 
+L	             27	          0	 ALU output: 00000000
+C	1
+S	             27	          0	W
+C	1
+I	             28	             28	  0
+S	             28	          0	F
+L	             28	          0	PC : 00000070
+R	             27	             27	          0
+C	1
+S	             28	          0	D
+L	             28	          0	Instr bits: 00000e93
+L	             28	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	             28	          0	E
+L	             28	          0	 Standard instr 
+L	             28	          0	 ALU output: 00000000
+C	1
+S	             28	          0	W
+C	1
+I	             29	             29	  0
+S	             29	          0	F
+L	             29	          0	PC : 00000074
+R	             28	             28	          0
+C	1
+S	             29	          0	D
+L	             29	          0	Instr bits: 00000f13
+L	             29	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	             29	          0	E
+L	             29	          0	 Standard instr 
+L	             29	          0	 ALU output: 00000000
+C	1
+S	             29	          0	W
+C	1
+I	             30	             30	  0
+S	             30	          0	F
+L	             30	          0	PC : 00000078
+R	             29	             29	          0
+C	1
+S	             30	          0	D
+L	             30	          0	Instr bits: 00000f93
+L	             30	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	             30	          0	E
+L	             30	          0	 Standard instr 
+L	             30	          0	 ALU output: 00000000
+C	1
+S	             30	          0	W
+C	1
+I	             31	             31	  0
+S	             31	          0	F
+L	             31	          0	PC : 0000007c
+R	             30	             30	          0
+C	1
+S	             31	          0	D
+L	             31	          0	Instr bits: 10000137
+L	             31	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	             31	          0	E
+L	             31	          0	 Standard instr 
+L	             31	          0	 ALU output: 10000000
+C	1
+S	             31	          0	W
+C	1
+I	             32	             32	  0
+S	             32	          0	F
+L	             32	          0	PC : 00000080
+R	             31	             31	          0
+C	1
+S	             32	          0	D
+L	             32	          0	Instr bits: ff010113
+L	             32	          0	 Potential r1: 10000000, Potential r2: 00000000
+C	1
+S	             32	          0	E
+L	             32	          0	 Standard instr 
+L	             32	          0	 ALU output: 0ffffff0
+C	1
+S	             32	          0	W
+C	1
+I	             33	             33	  0
+S	             33	          0	F
+L	             33	          0	PC : 00000084
+R	             32	             32	          0
+C	1
+S	             33	          0	D
+L	             33	          0	Instr bits: 018010ef
+L	             33	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	             33	          0	E
+L	             33	          0	 Ctrl instr 
+L	             33	          0	 ALU output: 00000088
+C	1
+S	             33	          0	W
+C	1
+I	             34	             34	  0
+S	             34	          0	F
+L	             34	          0	PC : 0000109c
+R	             33	             33	          0
+C	1
+S	             34	          0	D
+L	             34	          0	Instr bits: 00b00513
+L	             34	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	             34	          0	E
+L	             34	          0	 Standard instr 
+L	             34	          0	 ALU output: 0000000b
+C	1
+S	             34	          0	W
+C	1
+I	             35	             35	  0
+S	             35	          0	F
+L	             35	          0	PC : 000010a0
+R	             34	             34	          0
+C	1
+S	             35	          0	D
+L	             35	          0	Instr bits: 00008067
+L	             35	          0	 Potential r1: 00000088, Potential r2: 00000000
+C	1
+S	             35	          0	E
+L	             35	          0	 Ctrl instr 
+L	             35	          0	 ALU output: 000010a4
+C	1
+S	             35	          0	W
+C	1
+I	             36	             36	  0
+S	             36	          0	F
+L	             36	          0	PC : 00000088
+R	             35	             35	          0
+C	1
+S	             36	          0	D
+L	             36	          0	Instr bits: 00000513
+L	             36	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	             36	          0	E
+L	             36	          0	 Standard instr 
+L	             36	          0	 ALU output: 00000000
+C	1
+S	             36	          0	W
+C	1
+I	             37	             37	  0
+S	             37	          0	F
+L	             37	          0	PC : 0000008c
+R	             36	             36	          0
+C	1
+S	             37	          0	D
+L	             37	          0	Instr bits: 7d9000ef
+L	             37	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	             37	          0	E
+L	             37	          0	 Ctrl instr 
+L	             37	          0	 ALU output: 00000090
+C	1
+S	             37	          0	W
+C	1
+I	             38	             38	  0
+S	             38	          0	F
+L	             38	          0	PC : 00001064
+R	             37	             37	          0
+C	1
+S	             38	          0	D
+L	             38	          0	Instr bits: fe010113
+L	             38	          0	 Potential r1: 0ffffff0, Potential r2: 00000000
+C	1
+S	             38	          0	E
+L	             38	          0	 Standard instr 
+L	             38	          0	 ALU output: 0fffffd0
+C	1
+S	             38	          0	W
+C	1
+I	             39	             39	  0
+S	             39	          0	F
+L	             39	          0	PC : 00001068
+R	             38	             38	          0
+C	1
+S	             39	          0	D
+L	             39	          0	Instr bits: 00812e23
+L	             39	          0	 Potential r1: 0fffffd0, Potential r2: 00000000
+C	1
+S	             39	          0	E
+L	             39	          0	 MEM Mem { byte_en: 'hf, addr: 'h0fffffec, data: 'h00000000 }
+L	             39	          0	 ALU output: 00000000
+C	1
+S	             39	          0	W
+C	1
+I	             40	             40	  0
+S	             40	          0	F
+L	             40	          0	PC : 0000106c
+R	             39	             39	          0
+C	1
+S	             40	          0	D
+L	             40	          0	Instr bits: 02010413
+L	             40	          0	 Potential r1: 0fffffd0, Potential r2: 00000000
+C	1
+S	             40	          0	E
+L	             40	          0	 Standard instr 
+L	             40	          0	 ALU output: 0ffffff0
+C	1
+S	             40	          0	W
+C	1
+I	             41	             41	  0
+S	             41	          0	F
+L	             41	          0	PC : 00001070
+R	             40	             40	          0
+C	1
+S	             41	          0	D
+L	             41	          0	Instr bits: fea42623
+L	             41	          0	 Potential r1: 0ffffff0, Potential r2: 00000000
+C	1
+S	             41	          0	E
+L	             41	          0	 MEM Mem { byte_en: 'hf, addr: 'h0fffffdc, data: 'h00000000 }
+L	             41	          0	 ALU output: 00000000
+C	1
+S	             41	          0	W
+C	1
+I	             42	             42	  0
+S	             42	          0	F
+L	             42	          0	PC : 00001074
+R	             41	             41	          0
+C	1
+S	             42	          0	D
+L	             42	          0	Instr bits: 00001797
+L	             42	          0	 Potential r1: 00000000, Potential r2: 00000000
+C	1
+S	             42	          0	E
+L	             42	          0	 Standard instr 
+L	             42	          0	 ALU output: 00002074
+C	1
+S	             42	          0	W
+C	1
+I	             43	             43	  0
+S	             43	          0	F
+L	             43	          0	PC : 00001078
+R	             42	             42	          0
+C	1
+S	             43	          0	D
+L	             43	          0	Instr bits: f9478793
+L	             43	          0	 Potential r1: 00002074, Potential r2: 00000000
+C	1
+S	             43	          0	E
+L	             43	          0	 Standard instr 
+L	             43	          0	 ALU output: 00002008
+C	1
+S	             43	          0	W
+C	1
+I	             44	             44	  0
+S	             44	          0	F
+L	             44	          0	PC : 0000107c
+R	             43	             43	          0
+C	1
+S	             44	          0	D
+L	             44	          0	Instr bits: 0007a783
+L	             44	          0	 Potential r1: 00002008, Potential r2: 00000000
+C	1
+S	             44	          0	E
+L	             44	          0	 MEM Mem { byte_en: 'h0, addr: 'h00002008, data: 'h00000000 }
+L	             44	          0	 ALU output: 00000000
+C	1
+S	             44	          0	W
+C	1
+I	             45	             45	  0
+S	             45	          0	F
+L	             45	          0	PC : 00001080
+R	             44	             44	          0
+C	1
+S	             45	          0	D
+L	             45	          0	Instr bits: fec42703
+L	             45	          0	 Potential r1: 0ffffff0, Potential r2: 00000000
+C	1
+S	             45	          0	E
+L	             45	          0	 MEM Mem { byte_en: 'h0, addr: 'h0fffffdc, data: 'h00000000 }
+L	             45	          0	 ALU output: 00000000
+C	1
+S	             45	          0	W
+C	1
+I	             46	             46	  0
+S	             46	          0	F
+L	             46	          0	PC : 00001084
+R	             45	             45	          0
+C	1
+S	             46	          0	D
+L	             46	          0	Instr bits: 00e7a023
+L	             46	          0	 Potential r1: f000fff8, Potential r2: 00000000
+C	1
+S	             46	          0	E
+L	             46	          0	 MMIO Mem { byte_en: 'hf, addr: 'hf000fff8, data: 'h00000000 }
+L	             46	          0	 ALU output: 00000000
