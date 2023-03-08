@@ -71,9 +71,9 @@ module mkpipelined(RVIfc);
     FIFO#(E2W) e2wQueue <- mkPipelineFIFO;
 
     Reg#(Bit#(1)) epoch <- mkReg(0);
-    Vector#(32, Reg#(Bit#(1))) scoreboard <- replicateM(mkReg(0));
+    Vector#(32, Ehr#(2, Bit#(1))) scoreboard <- replicateM(mkEhr(0));
 
-    Bool debug = True;
+    Bool debug = False;
 
 	// Code to support Konata visualization
     String dumpFile = "output.log" ;
@@ -142,9 +142,9 @@ module mkpipelined(RVIfc);
         let rs2_idx = fields.rs2;
         let rd_idx = fields.rd;
 
-        if (scoreboard[rs1_idx] == 0 && 
-            scoreboard[rs2_idx] == 0 && 
-            scoreboard[rd_idx] == 0) begin // no data hazard
+        if (scoreboard[rs1_idx][0] == 0 && 
+            scoreboard[rs2_idx][0] == 0 && 
+            scoreboard[rd_idx][0] == 0) begin // no data hazard
             
             f2dQueue.deq();
             fromImem.deq();
@@ -164,8 +164,8 @@ module mkpipelined(RVIfc);
 
             if (decodedInst.valid_rd) begin
                 if (rd_idx != 0) begin 
-                    scoreboard[rd_idx] <= 1;
-                    $display("Stalling %x", rd_idx);
+                    scoreboard[rd_idx][0] <= 1;
+                    if(debug) $display("Stalling %x", rd_idx);
                 end
             end
         end
@@ -255,13 +255,6 @@ module mkpipelined(RVIfc);
             });
 
         end else begin
-            // if (dInst.valid_rd) begin
-            //     let rd_idx = fields.rd;
-            //     if (rd_idx != 0) begin 
-            //         scoreboard[rd_idx] <= 0;
-            //         $display("Unstalled %x", rd_idx);
-            //     end
-            // end
             e2wQueue.enq(E2W { 
                 dinst: dInst,
                 k_id: from_decode.k_id,
@@ -330,8 +323,8 @@ module mkpipelined(RVIfc);
             let rd_idx = fields.rd;
             if (rd_idx != 0) begin 
                 if (from_execute.valid == True) rf[rd_idx] <= data;
-                scoreboard[rd_idx] <= 0;
-                $display("Unstalled %x", rd_idx);
+                scoreboard[rd_idx][1] <= 0;
+                if(debug) $display("Unstalled %x", rd_idx);
             end
 		end
 
