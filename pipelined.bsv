@@ -329,7 +329,7 @@ module mkpipelined(RVIfc);
 		if (dInst.valid_rd) begin
             let rd_idx = fields.rd;
             if (rd_idx != 0) begin 
-                rf[rd_idx] <= data;
+                if (from_execute.valid == True) rf[rd_idx] <= data;
                 scoreboard[rd_idx] <= 0;
                 $display("Unstalled %x", rd_idx);
             end
