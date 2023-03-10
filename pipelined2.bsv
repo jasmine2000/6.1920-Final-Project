@@ -53,6 +53,40 @@ typedef struct {
     Bool valid;
 } E2W deriving (Eq, FShow, Bits);
 
+typedef Bit#(5) Token;
+interface SearchableQueue;
+    method Action enq(Token value);
+    method ActionValue#(Token) deq();
+    method ActionValue#(Bool) search(Token value);
+endinterface
+
+module mkSearchableQueue(SearchableQueue);
+    Vector#(4, Reg#(Token)) queue <- replicateM(mkReg(0));
+    Vector#(4, Ehr#(2, Bool)) is_valid <- replicateM(mkEhr(False));
+    Reg#(Bit#(2)) enqPtr <- mkReg(0);
+    Reg#(Bit#(2)) deqPtr <- mkReg(0);
+
+    method Action enq(Token value) if (is_valid[enqPtr][1] == False);
+        enqPtr <= enqPtr + 1;
+        queue[enqPtr] <= value;
+        is_valid[enqPtr][1] <= True;
+    endmethod
+
+    method ActionValue#(Token) deq() if (is_valid[deqPtr][0] == True);
+        deqPtr <= deqPtr + 1;
+        is_valid[deqPtr][0] <= False;
+        return queue[deqPtr];
+    endmethod
+
+    method ActionValue#(Bool) search(Token value);
+        Bool found = False;
+        for (int i = 0; i < 4; i = i + 1) begin
+            if (found == False && is_valid[i][1] == True && queue[i] == value) found = True;
+        end
+        return found;
+    endmethod
+endmodule
+
 (* synthesize *)
 module mkpipelined(RVIfc);
     // Interface with memory and devices
@@ -71,7 +105,8 @@ module mkpipelined(RVIfc);
     FIFO#(E2W) e2wQueue <- mkFIFO;
 
     Reg#(Bit#(1)) epoch <- mkReg(0);
-    Vector#(32, Ehr#(2, Bit#(2))) scoreboard <- replicateM(mkEhr(0));
+    // Vector#(32, Ehr#(2, Bit#(2))) scoreboard <- replicateM(mkEhr(0));
+    SearchableQueue scoreboard <- mkSearchableQueue;
 
     Bool debug = False;
 
@@ -142,8 +177,10 @@ module mkpipelined(RVIfc);
         let rs2_idx = fields.rs2;
         let rd_idx = fields.rd;
 
-        if (scoreboard[rs1_idx][0] == 0 && 
-            scoreboard[rs2_idx][0] == 0) begin // no data hazard
+        let valid_rs1 <- scoreboard.search(rs1_idx);
+        let valid_rs2 <- scoreboard.search(rs1_idx);
+
+        if (valid_rs1 == False && valid_rs2 == False) begin
             
             f2dQueue.deq();
             fromImem.deq();
@@ -163,8 +200,7 @@ module mkpipelined(RVIfc);
 
             if (decodedInst.valid_rd) begin
                 if (rd_idx != 0) begin 
-                    scoreboard[rd_idx][0] <= scoreboard[rd_idx][0] + 1;
-                    if(debug) $display("Stalling %x", rd_idx);
+                    scoreboard.enq(rd_idx);
                 end
             end
         end
@@ -321,9 +357,9 @@ module mkpipelined(RVIfc);
 		if (dInst.valid_rd) begin
             let rd_idx = fields.rd;
             if (rd_idx != 0) begin 
+                let rd_reg <- scoreboard.deq();
+                if (rd_reg != rd_idx) $display("HELP!!!");
                 if (from_execute.valid == True) rf[rd_idx] <= data;
-                scoreboard[rd_idx][1] <= scoreboard[rd_idx][1] - 1;
-                if(debug) $display("Unstalled %x", rd_idx);
             end
 		end
 
