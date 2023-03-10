@@ -111,12 +111,12 @@ Predicate: rv_core.RDY_getMMIOResp && mmioreq.i_notEmpty
 Blocking rules: (none)
  
 Logical execution order: tic,
+			 requestMMIO,
 			 responseMMIO,
 			 bram_serverAdapterA_overRun,
 			 bram_serverAdapterA_moveToOutFIFO,
 			 responseD,
 			 requestD,
-			 requestMMIO,
 			 bram_serverAdapterA_stageReadResponseAlways,
 			 bram_serverAdapterA_outData_enqueue,
 			 bram_serverAdapterA_outData_dequeue,

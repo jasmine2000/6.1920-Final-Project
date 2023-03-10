@@ -66,9 +66,9 @@ module mkpipelined(RVIfc);
     Ehr#(2, Bit#(32)) pc <- mkEhr(0);
     Vector#(32, Reg#(Bit#(32))) rf <- replicateM(mkReg(0));
 
-    FIFO#(F2D) f2dQueue <- mkPipelineFIFO;
-    FIFO#(D2E) d2eQueue <- mkPipelineFIFO;
-    FIFO#(E2W) e2wQueue <- mkPipelineFIFO;
+    FIFO#(F2D) f2dQueue <- mkFIFO;
+    FIFO#(D2E) d2eQueue <- mkFIFO;
+    FIFO#(E2W) e2wQueue <- mkFIFO;
 
     Reg#(Bit#(1)) epoch <- mkReg(0);
     Vector#(32, Ehr#(2, Bit#(1))) scoreboard <- replicateM(mkEhr(0));
@@ -286,12 +286,12 @@ module mkpipelined(RVIfc);
 
         e2wQueue.deq();
 
-        retired.enq(current_id);
         let dInst = from_execute.dinst;
         let data = from_execute.data;
         let fields = getInstFields(dInst.inst);
 
         if (from_execute.valid == True) begin
+            retired.enq(current_id);
             if (isMemoryInst(dInst)) begin // (* // write_val *)
                 let mem_business = from_execute.mem_business;
                 let resp = ?;

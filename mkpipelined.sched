@@ -4,38 +4,32 @@ Method schedule
 ---------------
 Method: getIReq
 Ready signal: toImem_rv.port1__read[68]
-Conflict-free: getDReq, getMMIOReq
-Sequenced after (restricted): getIResp, getDResp, getMMIOResp
+Conflict-free: getIResp, getDReq, getDResp, getMMIOReq, getMMIOResp
 Conflicts: getIReq
  
 Method: getIResp
 Ready signal: ! fromImem_rv.port0__read[68]
-Conflict-free: getDReq, getDResp, getMMIOReq, getMMIOResp
-Sequenced before (restricted): getIReq
+Conflict-free: getIReq, getDReq, getDResp, getMMIOReq, getMMIOResp
 Conflicts: getIResp
  
 Method: getDReq
 Ready signal: toDmem_rv.port1__read[68]
-Conflict-free: getIReq, getIResp, getMMIOReq
-Sequenced after (restricted): getDResp, getMMIOResp
+Conflict-free: getIReq, getIResp, getDResp, getMMIOReq, getMMIOResp
 Conflicts: getDReq
  
 Method: getDResp
 Ready signal: ! fromDmem_rv.port0__read[68]
-Conflict-free: getIResp, getMMIOResp
-Sequenced before (restricted): getIReq, getDReq, getMMIOReq
+Conflict-free: getIReq, getIResp, getDReq, getMMIOReq, getMMIOResp
 Conflicts: getDResp
  
 Method: getMMIOReq
 Ready signal: toMMIO_rv.port1__read[68]
-Conflict-free: getIReq, getIResp, getDReq
-Sequenced after (restricted): getDResp, getMMIOResp
+Conflict-free: getIReq, getIResp, getDReq, getDResp, getMMIOResp
 Conflicts: getMMIOReq
  
 Method: getMMIOResp
 Ready signal: ! fromMMIO_rv.port0__read[68]
-Conflict-free: getIResp, getDResp
-Sequenced before (restricted): getIReq, getDReq, getMMIOReq
+Conflict-free: getIReq, getIResp, getDReq, getDResp, getMMIOReq
 Conflicts: getMMIOResp
  
 Rule schedule
@@ -177,14 +171,12 @@ Predicate: True
 Blocking rules: (none)
  
 Rule: fetch
-Predicate: (! toImem_rv.port0__read[68]) &&
-	   (! f2dQueue_rv.port1__read[113]) &&
-	   (! starting)
-Blocking rules: decode, execute
+Predicate: (! toImem_rv.port0__read[68]) && f2dQueue.i_notFull && (! starting)
+Blocking rules: (none)
  
 Rule: decode
-Predicate: f2dQueue_rv.port0__read[113] &&
-	   fromImem_rv.port1__read[68] &&
+Predicate: fromImem_rv.port1__read[68] &&
+	   f2dQueue.i_notEmpty &&
 	   ((! (PrimArrayDynSelect (PrimBuildArray ((scoreboard_0_readBeforeLaterWrites_0.read &&
 						     scoreboard_0_readBeforeLaterWrites_1.read)
 						    ? ! scoreboard_0_register
@@ -572,113 +564,112 @@ Predicate: f2dQueue_rv.port0__read[113] &&
 						    ? ! scoreboard_31_register
 						    : (_ :: Bit 1)))
 				   fromImem_rv.port1__read[11:7])) ||
-	    (! d2eQueue_rv.port1__read[217])) &&
+	    d2eQueue.i_notFull) &&
 	   (! starting)
-Blocking rules: execute, writeback
+Blocking rules: (none)
  
 Rule: execute
-Predicate: d2eQueue_rv.port0__read[217] &&
-	   (! e2wQueue_rv.port1__read[127]) &&
-	   ((d2eQueue_rv.port0__read[112] == epoch)
-	    ? d2eQueue_rv.port0__read[183] ||
-	      (! (d2eQueue_rv.port0__read[181:180] == 2'b0)) ||
-	      ((((d2eQueue_rv.port0__read[111:80] +
-		  ((d2eQueue_rv.port0__read[212] &&
-		    ((d2eQueue_rv.port0__read[212]
-		      ? d2eQueue_rv.port0__read[211:209]
+Predicate: d2eQueue.i_notEmpty &&
+	   e2wQueue.i_notFull &&
+	   ((d2eQueue.first[112] == epoch)
+	    ? d2eQueue.first[183] || (! (d2eQueue.first[181:180] == 2'b0)) ||
+	      ((((d2eQueue.first[111:80] +
+		  ((d2eQueue.first[212] &&
+		    ((d2eQueue.first[212]
+		      ? d2eQueue.first[211:209]
 		      : (_ :: Bit 3)) ==
 		     3'd0))
-		   ? sext d2eQueue_rv.port0__read[208:197]
-		   : ((d2eQueue_rv.port0__read[212] &&
-		       ((d2eQueue_rv.port0__read[212]
-			 ? d2eQueue_rv.port0__read[211:209]
+		   ? sext d2eQueue.first[208:197]
+		   : ((d2eQueue.first[212] &&
+		       ((d2eQueue.first[212]
+			 ? d2eQueue.first[211:209]
 			 : (_ :: Bit 3)) ==
 			3'd1))
-		      ? sext {d2eQueue_rv.port0__read[208:202], d2eQueue_rv.port0__read[188:184]}
-		      : ((d2eQueue_rv.port0__read[212] &&
-			  ((d2eQueue_rv.port0__read[212]
-			    ? d2eQueue_rv.port0__read[211:209]
+		      ? sext {d2eQueue.first[208:202], d2eQueue.first[188:184]}
+		      : ((d2eQueue.first[212] &&
+			  ((d2eQueue.first[212]
+			    ? d2eQueue.first[211:209]
 			    : (_ :: Bit 3)) ==
 			   3'd2))
-			 ? sext {d2eQueue_rv.port0__read[208], d2eQueue_rv.port0__read[184], d2eQueue_rv.port0__read[207:202], d2eQueue_rv.port0__read[188:185], 1'b0}
-			 : ((d2eQueue_rv.port0__read[212] &&
-			     ((d2eQueue_rv.port0__read[212]
-			       ? d2eQueue_rv.port0__read[211:209]
+			 ? sext {d2eQueue.first[208], d2eQueue.first[184], d2eQueue.first[207:202], d2eQueue.first[188:185], 1'b0}
+			 : ((d2eQueue.first[212] &&
+			     ((d2eQueue.first[212]
+			       ? d2eQueue.first[211:209]
 			       : (_ :: Bit 3)) ==
 			      3'd3))
-			    ? {d2eQueue_rv.port0__read[208:189], 12'b0}
-			    : ((d2eQueue_rv.port0__read[212] &&
-				((d2eQueue_rv.port0__read[212]
-				  ? d2eQueue_rv.port0__read[211:209]
+			    ? {d2eQueue.first[208:189], 12'b0}
+			    : ((d2eQueue.first[212] &&
+				((d2eQueue.first[212]
+				  ? d2eQueue.first[211:209]
 				  : (_ :: Bit 3)) ==
 				 3'd4))
-			       ? sext {d2eQueue_rv.port0__read[208], d2eQueue_rv.port0__read[196:189], d2eQueue_rv.port0__read[197], d2eQueue_rv.port0__read[207:198], 1'b0}
+			       ? sext {d2eQueue.first[208], d2eQueue.first[196:189], d2eQueue.first[197], d2eQueue.first[207:198], 1'b0}
 			       : 32'd0))))))[31:2] ==
 		 30'd1006649340) ||
-		((d2eQueue_rv.port0__read[111:80] +
-		  ((d2eQueue_rv.port0__read[212] &&
-		    ((d2eQueue_rv.port0__read[212]
-		      ? d2eQueue_rv.port0__read[211:209]
+		((d2eQueue.first[111:80] +
+		  ((d2eQueue.first[212] &&
+		    ((d2eQueue.first[212]
+		      ? d2eQueue.first[211:209]
 		      : (_ :: Bit 3)) ==
 		     3'd0))
-		   ? sext d2eQueue_rv.port0__read[208:197]
-		   : ((d2eQueue_rv.port0__read[212] &&
-		       ((d2eQueue_rv.port0__read[212]
-			 ? d2eQueue_rv.port0__read[211:209]
+		   ? sext d2eQueue.first[208:197]
+		   : ((d2eQueue.first[212] &&
+		       ((d2eQueue.first[212]
+			 ? d2eQueue.first[211:209]
 			 : (_ :: Bit 3)) ==
 			3'd1))
-		      ? sext {d2eQueue_rv.port0__read[208:202], d2eQueue_rv.port0__read[188:184]}
-		      : ((d2eQueue_rv.port0__read[212] &&
-			  ((d2eQueue_rv.port0__read[212]
-			    ? d2eQueue_rv.port0__read[211:209]
+		      ? sext {d2eQueue.first[208:202], d2eQueue.first[188:184]}
+		      : ((d2eQueue.first[212] &&
+			  ((d2eQueue.first[212]
+			    ? d2eQueue.first[211:209]
 			    : (_ :: Bit 3)) ==
 			   3'd2))
-			 ? sext {d2eQueue_rv.port0__read[208], d2eQueue_rv.port0__read[184], d2eQueue_rv.port0__read[207:202], d2eQueue_rv.port0__read[188:185], 1'b0}
-			 : ((d2eQueue_rv.port0__read[212] &&
-			     ((d2eQueue_rv.port0__read[212]
-			       ? d2eQueue_rv.port0__read[211:209]
+			 ? sext {d2eQueue.first[208], d2eQueue.first[184], d2eQueue.first[207:202], d2eQueue.first[188:185], 1'b0}
+			 : ((d2eQueue.first[212] &&
+			     ((d2eQueue.first[212]
+			       ? d2eQueue.first[211:209]
 			       : (_ :: Bit 3)) ==
 			      3'd3))
-			    ? {d2eQueue_rv.port0__read[208:189], 12'b0}
-			    : ((d2eQueue_rv.port0__read[212] &&
-				((d2eQueue_rv_port0__read____d710(...)[212]
-				  ? d2eQueue_rv_port0__read____d710(...)[211:209]
+			    ? {d2eQueue.first[208:189], 12'b0}
+			    : ((d2eQueue.first[212] &&
+				((d2eQueue_first____d706(...)[212]
+				  ? d2eQueue_first____d706(...)[211:209]
 				  : (_ :: Bit 3)) ==
 				 3'd4))
-			       ? sext {d2eQueue_rv.port0__read[208], d2eQueue_rv.port0__read[196:189], d2eQueue_rv_port0__read____d710(...)[197], d2eQueue_rv_port0__read____d710(...)[207:198], 1'b0}
+			       ? sext {d2eQueue.first[208], d2eQueue.first[196:189], d2eQueue_first____d706(...)[197], d2eQueue_first____d706(...)[207:198], 1'b0}
 			       : 32'd0))))))[31:2] ==
 		 30'd1006649341) ||
-		((d2eQueue_rv.port0__read[111:80] +
-		  ((d2eQueue_rv.port0__read[212] &&
-		    ((d2eQueue_rv.port0__read[212]
-		      ? d2eQueue_rv.port0__read[211:209]
+		((d2eQueue.first[111:80] +
+		  ((d2eQueue.first[212] &&
+		    ((d2eQueue.first[212]
+		      ? d2eQueue.first[211:209]
 		      : (_ :: Bit 3)) ==
 		     3'd0))
-		   ? sext d2eQueue_rv.port0__read[208:197]
-		   : ((d2eQueue_rv.port0__read[212] &&
-		       ((d2eQueue_rv.port0__read[212]
-			 ? d2eQueue_rv.port0__read[211:209]
+		   ? sext d2eQueue.first[208:197]
+		   : ((d2eQueue.first[212] &&
+		       ((d2eQueue.first[212]
+			 ? d2eQueue.first[211:209]
 			 : (_ :: Bit 3)) ==
 			3'd1))
-		      ? sext {d2eQueue_rv.port0__read[208:202], d2eQueue_rv.port0__read[188:184]}
-		      : ((d2eQueue_rv.port0__read[212] &&
-			  ((d2eQueue_rv.port0__read[212]
-			    ? d2eQueue_rv.port0__read[211:209]
+		      ? sext {d2eQueue.first[208:202], d2eQueue.first[188:184]}
+		      : ((d2eQueue.first[212] &&
+			  ((d2eQueue.first[212]
+			    ? d2eQueue.first[211:209]
 			    : (_ :: Bit 3)) ==
 			   3'd2))
-			 ? sext {d2eQueue_rv.port0__read[208], d2eQueue_rv.port0__read[184], d2eQueue_rv.port0__read[207:202], d2eQueue_rv.port0__read[188:185], 1'b0}
-			 : ((d2eQueue_rv.port0__read[212] &&
-			     ((d2eQueue_rv.port0__read[212]
-			       ? d2eQueue_rv.port0__read[211:209]
+			 ? sext {d2eQueue.first[208], d2eQueue.first[184], d2eQueue.first[207:202], d2eQueue.first[188:185], 1'b0}
+			 : ((d2eQueue.first[212] &&
+			     ((d2eQueue.first[212]
+			       ? d2eQueue.first[211:209]
 			       : (_ :: Bit 3)) ==
 			      3'd3))
-			    ? {d2eQueue_rv.port0__read[208:189], 12'b0}
-			    : ((d2eQueue_rv.port0__read[212] &&
-				((d2eQueue_rv_port0__read____d710(...)[212]
-				  ? d2eQueue_rv_port0__read____d710(...)[211:209]
+			    ? {d2eQueue.first[208:189], 12'b0}
+			    : ((d2eQueue.first[212] &&
+				((d2eQueue_first____d706(...)[212]
+				  ? d2eQueue_first____d706(...)[211:209]
 				  : (_ :: Bit 3)) ==
 				 3'd4))
-			       ? sext {d2eQueue_rv.port0__read[208], d2eQueue_rv.port0__read[196:189], d2eQueue_rv_port0__read____d710(...)[197], d2eQueue_rv_port0__read____d710(...)[207:198], 1'b0}
+			       ? sext {d2eQueue.first[208], d2eQueue.first[196:189], d2eQueue_first____d706(...)[197], d2eQueue_first____d706(...)[207:198], 1'b0}
 			       : 32'd0))))))[31:2] ==
 		 30'd1006649342))
 	       ? ! toMMIO_rv.port0__read[68]
@@ -688,29 +679,26 @@ Predicate: d2eQueue_rv.port0__read[217] &&
 Blocking rules: (none)
  
 Rule: writeback
-Predicate: e2wQueue_rv.port0__read[127] &&
-	   retired.i_notFull &&
-	   ((! e2wQueue_rv.port0__read[0]) ||
-	    e2wQueue_rv.port0__read[55] ||
-	    (! (e2wQueue_rv.port0__read[53:52] == 2'b0)) ||
-	    ((e2wQueue_rv.port0__read[127] && e2wQueue_rv.port0__read[121])
-	     ? fromMMIO_rv.port1__read[68]
-	     : fromDmem_rv.port1__read[68])) &&
-	   ((! e2wQueue_rv.port0__read[85]) ||
-	    (e2wQueue_rv.port0__read[60:56] == 5'd0) ||
-	    (! e2wQueue_rv.port0__read[0]) ||
-	    e2wQueue_rv.port0__read[55] ||
-	    (! (e2wQueue_rv.port0__read[53:52] == 2'b0)) ||
-	    (((e2wQueue_rv.port0__read[126:124] == 3'b0) ||
-	      (e2wQueue_rv.port0__read[126:124] == 3'b1) ||
-	      (e2wQueue_rv.port0__read[126:124] == 3'b100) ||
-	      (e2wQueue_rv.port0__read[126:124] == 3'b101))
-	     ? (e2wQueue_rv.port0__read[127] && e2wQueue_rv.port0__read[121])
+Predicate: e2wQueue.i_notEmpty &&
+	   ((! e2wQueue.first[0]) ||
+	    (retired.i_notFull &&
+	     (e2wQueue.first[55] || (! (e2wQueue.first[53:52] == 2'b0)) ||
+	      ((e2wQueue.i_notEmpty && e2wQueue.first[121])
+	       ? fromMMIO_rv.port1__read[68]
+	       : fromDmem_rv.port1__read[68])))) &&
+	   ((! e2wQueue.first[85]) ||
+	    (e2wQueue.first[60:56] == 5'd0) ||
+	    (! e2wQueue.first[0]) ||
+	    e2wQueue.first[55] || (! (e2wQueue.first[53:52] == 2'b0)) ||
+	    (((e2wQueue.first[126:124] == 3'b0) ||
+	      (e2wQueue.first[126:124] == 3'b1) ||
+	      (e2wQueue.first[126:124] == 3'b100) ||
+	      (e2wQueue.first[126:124] == 3'b101))
+	     ? (e2wQueue.i_notEmpty && e2wQueue.first[121])
 	       ? fromMMIO_rv.port1__read[68]
 	       : fromDmem_rv.port1__read[68]
-	     : ((! (e2wQueue_rv.port0__read[126:124] == 3'b10)) ||
-		((e2wQueue_rv.port0__read[127] &&
-		  e2wQueue_rv.port0__read[121])
+	     : ((! (e2wQueue.first[126:124] == 3'b10)) ||
+		((e2wQueue.i_notEmpty && e2wQueue.first[121])
 		 ? fromMMIO_rv.port1__read[68]
 		 : fromDmem_rv.port1__read[68])))) &&
 	   (! starting)
@@ -727,13 +715,13 @@ Blocking rules: (none)
 Logical execution order: getIResp,
 			 getDResp,
 			 getMMIOResp,
-			 writeback,
+			 fetch,
+			 getIReq,
+			 decode,
 			 execute,
 			 getDReq,
 			 getMMIOReq,
-			 decode,
-			 fetch,
-			 getIReq,
+			 writeback,
 			 administrative_konata_commit,
 			 administrative_konata_flush,
 			 do_tic_logging,
