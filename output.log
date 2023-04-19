@@ -465,13 +465,6 @@ S	             33	          0	W
 L	             33	          0	writeback
 R	             32	             32	          0
 C	1
-S	             35	          0	D
-L	             35	          0	decoding
-S	             34	          0	W
-L	             34	          0	writeback
-R	             33	             33	          0
-R	             34	          0	          1
-C	1
 I	             37	             37	  0
 S	             37	          0	F
 L	             37	          0	PC 000010a0
@@ -479,6 +472,10 @@ S	             36	          0	D
 L	             36	          0	decoding
 S	             35	          0	E
 L	             35	          0	executing
+S	             34	          0	W
+L	             34	          0	writeback
+R	             33	             33	          0
+R	             34	          0	          1
 C	1
 I	             38	             38	  0
 S	             38	          0	F
