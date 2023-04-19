@@ -2,9 +2,21 @@ import RVUtil::*;
 import BRAM::*;
 import pipelined::*;
 import FIFO::*;
-typedef Bit#(32) Word;
+
+// Imports from Beveren
+import ClientServer::*;
+import GetPut::*;
+import Randomizable::*;
+import MainMem::*;
+import MemTypes::*;
+import Cache::*;
+
 
 module mktop_pipelined(Empty);
+    // From beveren TODO double check purpose of all of these
+    Cache cacheInstruction <- mkCache;
+    Cache cacheData <- mkCache;
+    
     // Instantiate the dual ported memory
     BRAM_Configure cfg = defaultValue();
     cfg.loadFormat = tagged Hex "mem.vmh";
@@ -20,45 +32,73 @@ module mktop_pipelined(Empty);
     rule tic;
 	    cycle_count <= cycle_count + 1;
     endrule
-
-    rule requestI;
+    
+    rule requestIProcToCache;
         let req <- rv_core.getIReq;
-        if (debug) $display("Get IReq", fshow(req));
+        if (debug) $display("Get IReq from Proc ", fshow(req));
+        cacheInstruction.putFromProc(newreq);
+    endrule
+
+    
+    rule requestICacheToMem;
+        let req <- cacheInstruction.getToMem();
+        if (debug) $display("Get IReq from Cache ", fshow(req));
         ireq <= req;
-            bram.portB.request.put(BRAMRequestBE{
+        bram.portB.request.put(BRAMRequestBE{
                     writeen: req.byte_en,
                     responseOnWrite: True,
                     address: truncate(req.addr >> 2),
                     datain: req.data});
     endrule
 
-    rule responseI;
+    rule responseICacheToProc;
+        let req = cacheInstruction.getToProc();
+        if (debug) $display("Get IResp from Cache ", fshow(req));
+        rv_core.getIResp(req);
+    endrule
+
+    rule responseIMemToCache;
         let x <- bram.portB.response.get();
         let req = ireq;
-        if (debug) $display("Get IResp ", fshow(req), fshow(x));
+        if (debug) $display("Get IResp from Mem", fshow(req), fshow(x));
         req.data = x;
-            rv_core.getIResp(req);
+        cacheInstruction.putFromMem(req);
     endrule
 
-    rule requestD;
+
+    rule requestDProcToCache;
         let req <- rv_core.getDReq;
-        dreq <= req;
-        if (debug) $display("Get DReq", fshow(req));
-        bram.portA.request.put(BRAMRequestBE{
-          writeen: req.byte_en,
-          responseOnWrite: True,
-          address: truncate(req.addr >> 2),
-          datain: req.data});
+        if (debug) $display("Get DReq from Proc ", fshow(req));
+        cacheData.putFromProc(newreq);
     endrule
 
-    rule responseD;
-        let x <- bram.portA.response.get();
-        let req = dreq;
-        if (debug) $display("Get IResp ", fshow(req), fshow(x));
-        req.data = x;
-            rv_core.getDResp(req);
+    
+    rule requestDCacheToMem;
+        let req <- cacheData.getToMem();
+        if (debug) $display("Get DReq from Cache ", fshow(req));
+        dreq <= req;
+        bram.portB.request.put(BRAMRequestBE{
+                    writeen: req.byte_en,
+                    responseOnWrite: True,
+                    address: truncate(req.addr >> 2),
+                    datain: req.data});
     endrule
-  
+
+    rule responseDCacheToProc;
+        let req = cacheData.getToProc();
+        if (debug) $display("Get DResp from Cache ", fshow(req));
+        rv_core.getDResp(req);
+    endrule
+
+    rule responseDMemToCache;
+        let x <- bram.portB.response.get();
+        let req = dreq;
+        if (debug) $display("Get DResp from Mem", fshow(req), fshow(x));
+        req.data = x;
+        cacheData.putFromMem(req);
+    endrule
+
+    // TODO update request model to skip directly to MMIO (think it already works)
     rule requestMMIO;
         let req <- rv_core.getMMIOReq;
         if (debug) $display("Get MMIOReq", fshow(req));
