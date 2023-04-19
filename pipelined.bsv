@@ -70,7 +70,7 @@ module mkpipelined(RVIfc);
     FIFO#(D2E) d2eQueue <- mkFIFO;
     FIFO#(E2W) e2wQueue <- mkFIFO;
 
-    Reg#(Bit#(1)) epoch <- mkReg(0);
+    Ehr#(2, Bit#(1)) epoch <- mkEhr(1'b0);
     Vector#(32, Ehr#(2, Bit#(2))) scoreboard <- replicateM(mkEhr(0));
 
     Bool debug = False;
@@ -97,8 +97,10 @@ module mkpipelined(RVIfc);
 	endrule
 		
     rule fetch if (!starting);
-        if(debug) $display("Fetch %x", pc[0]);
-        Bit#(32) pc_fetched = pc[0];
+        Bit#(32) pc_fetched = pc[1];
+        Bit#(32) next_pc_predicted = pc_fetched + 4;
+        pc[1] <= next_pc_predicted;
+        if(debug) $display("Fetch %x", pc_fetched);
         // You should put the pc that you fetch in pc_fetched
         // Below is the code to support Konata's visualization
 		let iid <- fetch1Konata(lfh, fresh_id, 0);
@@ -114,11 +116,10 @@ module mkpipelined(RVIfc);
 
         f2dQueue.enq(F2D { 
             pc: pc_fetched,
-            ppc: pc_fetched + 4,
-            epoch: epoch,
+            ppc: next_pc_predicted,
+            epoch: epoch[1],
             k_id: iid
         });
-        pc[0] <= pc_fetched + 4;
 
         // This will likely end with something like:
         // f2d.enq(F2D{ ..... k_id: iid});
@@ -189,7 +190,7 @@ module mkpipelined(RVIfc);
 
         let fields = getInstFields(dInst.inst);
 
-        if (from_decode.epoch == epoch) begin
+        if (from_decode.epoch == epoch[0]) begin
             let rv1 = from_decode.rv1;
             let rv2 = from_decode.rv2;
             let pc1 = from_decode.pc;
@@ -238,8 +239,8 @@ module mkpipelined(RVIfc);
             let controlResult = execControl32(dInst.inst, rv1, rv2, imm, pc1);
             let nextPc = controlResult.nextPC;
             if (nextPc != from_decode.ppc) begin
-                epoch <= epoch + 1;
-                pc[1] <= nextPc;
+                epoch[0] <= epoch[0] + 1;
+                pc[0] <= nextPc;
             end
 
             labelKonataLeft(lfh,current_id, $format(" ALU output: %x" , data));
