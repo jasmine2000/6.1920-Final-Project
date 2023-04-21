@@ -73,7 +73,7 @@ module mkpipelined(RVIfc);
     Ehr#(2, Bit#(1)) epoch <- mkEhr(1'b0);
     Vector#(32, Ehr#(2, Bit#(2))) scoreboard <- replicateM(mkEhr(0));
 
-    Bool debug = False;
+    Bool debug = True;
 
 	// Code to support Konata visualization
     String dumpFile = "output.log" ;

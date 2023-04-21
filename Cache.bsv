@@ -22,7 +22,7 @@ typedef enum {
 module mkCache(Cache);
   BRAM_Configure cfg = defaultValue();
   BRAM2Port#(Bit#(7), CacheLine) cache <- mkBRAM2Server(cfg);
-  Vector#(128, Reg#(CacheTag)) tags <- replicateM(mkReg(0));
+  Vector#(128, Reg#(CacheTag)) tags <- replicateM(mkReg(19'hffff));
   Vector#(128, Reg#(Bit#(1))) dirty <- replicateM(mkReg(0));
 
   Reg#(Maybe#(CacheReq)) currentRequest <- mkReg(Invalid);
@@ -39,7 +39,7 @@ module mkCache(Cache);
 
   Reg#(Maybe#(CacheLine)) memResp <- mkReg(Invalid);
 
-  Reg#(Bool) debug <- mkReg(False);
+  Reg#(Bool) debug <- mkReg(True);
 
   rule newReq if (
     state == Ready &&
@@ -182,6 +182,17 @@ module mkCache(Cache);
       toProcQueue.enq(resp[block_offset]);
       memResp <= tagged Invalid;
 
+      resp[index] = req.data;
+
+      let newLine = BRAMRequest{
+        write: True,
+        address: index,
+        datain: resp,
+        responseOnWrite: False
+      };
+      cache.portA.request.put(newLine);
+      tags[index] <= tag;
+
     end else begin // Write
       resp[index] = req.data;
 
@@ -251,6 +262,7 @@ module mkCache(Cache);
   method ActionValue#(Word) getToProc();
     let ret = toProcQueue.first();
     toProcQueue.deq();
+    if (debug) $display("%x get to proc", ret);
     return ret;
   endmethod
 
