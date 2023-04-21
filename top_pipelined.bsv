@@ -7,7 +7,6 @@ import FIFO::*;
 import ClientServer::*;
 import GetPut::*;
 import Randomizable::*;
-import MainMem::*;
 import MemTypes::*;
 import Cache::*;
 
@@ -20,12 +19,12 @@ module mktop_pipelined(Empty);
     // Instantiate the dual ported memory
     BRAM_Configure cfg = defaultValue();
     cfg.loadFormat = tagged Hex "mem.vmh";
-    BRAM2PortBE#(Bit#(30), Word, 4) bram <- mkBRAM2ServerBE(cfg);
+    BRAM2Port#(LineAddr, CacheLine) bram <- mkBRAM2Server(cfg);
 
     RVIfc rv_core <- mkpipelined;
-    Reg#(Mem) ireq <- mkRegU;
-    Reg#(Mem) dreq <- mkRegU;
-    FIFO#(Mem) mmioreq <- mkFIFO;
+    Reg#(MainMemReq) ireq <- mkRegU;
+    Reg#(MainMemReq) dreq <- mkRegU;
+    FIFO#(CacheReq) mmioreq <- mkFIFO;
     let debug = False;
     Reg#(Bit#(32)) cycle_count <- mkReg(0);
 
@@ -34,42 +33,42 @@ module mktop_pipelined(Empty);
     endrule
     
     rule requestIProcToCache;
-        let req <- rv_core.getIReq;
+        CacheReq req <- rv_core.getIReq;
         if (debug) $display("Get IReq from Proc ", fshow(req));
-        cacheInstruction.putFromProc(newreq);
+        cacheInstruction.putFromProc(req);
     endrule
 
     
     rule requestICacheToMem;
-        let req <- cacheInstruction.getToMem();
+        MainMemReq req <- cacheInstruction.getToMem();
         if (debug) $display("Get IReq from Cache ", fshow(req));
         ireq <= req;
-        bram.portB.request.put(BRAMRequestBE{
-                    writeen: req.byte_en,
+        bram.portB.request.put(BRAMRequest{
+                    write: req.write,
                     responseOnWrite: True,
-                    address: truncate(req.addr >> 2),
+                    address: req.addr,
                     datain: req.data});
     endrule
 
     rule responseICacheToProc;
-        let req = cacheInstruction.getToProc();
+        Word req <- cacheInstruction.getToProc();
         if (debug) $display("Get IResp from Cache ", fshow(req));
         rv_core.getIResp(req);
     endrule
 
     rule responseIMemToCache;
-        let x <- bram.portB.response.get();
+        CacheLine x <- bram.portB.response.get();
         let req = ireq;
         if (debug) $display("Get IResp from Mem", fshow(req), fshow(x));
         req.data = x;
-        cacheInstruction.putFromMem(req);
+        cacheInstruction.putFromMem(x);
     endrule
 
 
     rule requestDProcToCache;
         let req <- rv_core.getDReq;
         if (debug) $display("Get DReq from Proc ", fshow(req));
-        cacheData.putFromProc(newreq);
+        cacheData.putFromProc(req);
     endrule
 
     
@@ -77,15 +76,15 @@ module mktop_pipelined(Empty);
         let req <- cacheData.getToMem();
         if (debug) $display("Get DReq from Cache ", fshow(req));
         dreq <= req;
-        bram.portB.request.put(BRAMRequestBE{
-                    writeen: req.byte_en,
+        bram.portB.request.put(BRAMRequest{
+                    write: req.write,
                     responseOnWrite: True,
-                    address: truncate(req.addr >> 2),
+                    address: req.addr,
                     datain: req.data});
     endrule
 
     rule responseDCacheToProc;
-        let req = cacheData.getToProc();
+        Word req <- cacheData.getToProc();
         if (debug) $display("Get DResp from Cache ", fshow(req));
         rv_core.getDResp(req);
     endrule
@@ -95,12 +94,12 @@ module mktop_pipelined(Empty);
         let req = dreq;
         if (debug) $display("Get DResp from Mem", fshow(req), fshow(x));
         req.data = x;
-        cacheData.putFromMem(req);
+        cacheData.putFromMem(x);
     endrule
 
     // TODO update request model to skip directly to MMIO (think it already works)
     rule requestMMIO;
-        let req <- rv_core.getMMIOReq;
+        CacheReq req <- rv_core.getMMIOReq;
         if (debug) $display("Get MMIOReq", fshow(req));
         if (req.byte_en == 'hf) begin
             if (req.addr == 'hf000_fff4) begin
@@ -131,10 +130,10 @@ module mktop_pipelined(Empty);
     endrule
 
     rule responseMMIO;
-        let req = mmioreq.first();
+        CacheReq req = mmioreq.first();
         mmioreq.deq();
         if (debug) $display("Put MMIOResp", fshow(req));
-        rv_core.getMMIOResp(req);
+        rv_core.getMMIOResp(req.data);
     endrule
     
 endmodule

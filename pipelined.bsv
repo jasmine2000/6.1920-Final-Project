@@ -7,15 +7,15 @@ import KonataHelper::*;
 import Printf::*;
 import Ehr::*;
 
-typedef struct { Bit#(4) byte_en; Bit#(32) addr; Bit#(32) data; } Mem deriving (Eq, FShow, Bits);
+import MemTypes::*;
 
 interface RVIfc;
-    method ActionValue#(Mem) getIReq();
-    method Action getIResp(Mem a);
-    method ActionValue#(Mem) getDReq();
-    method Action getDResp(Mem a);
-    method ActionValue#(Mem) getMMIOReq();
-    method Action getMMIOResp(Mem a);
+    method ActionValue#(CacheReq) getIReq();
+    method Action getIResp(Word a);
+    method ActionValue#(CacheReq) getDReq();
+    method Action getDResp(Word a);
+    method ActionValue#(CacheReq) getMMIOReq();
+    method Action getMMIOResp(Word a);
 endinterface
 typedef struct { Bool isUnsigned; Bit#(2) size; Bit#(2) offset; Bool mmio; } MemBusiness deriving (Eq, FShow, Bits);
 
@@ -56,12 +56,12 @@ typedef struct {
 (* synthesize *)
 module mkpipelined(RVIfc);
     // Interface with memory and devices
-    FIFO#(Mem) toImem <- mkBypassFIFO;
-    FIFO#(Mem) fromImem <- mkBypassFIFO;
-    FIFO#(Mem) toDmem <- mkBypassFIFO;
-    FIFO#(Mem) fromDmem <- mkBypassFIFO;
-    FIFO#(Mem) toMMIO <- mkBypassFIFO;
-    FIFO#(Mem) fromMMIO <- mkBypassFIFO;
+    FIFO#(CacheReq) toImem <- mkBypassFIFO;
+    FIFO#(Word) fromImem <- mkBypassFIFO;
+    FIFO#(CacheReq) toDmem <- mkBypassFIFO;
+    FIFO#(Word) fromDmem <- mkBypassFIFO;
+    FIFO#(CacheReq) toMMIO <- mkBypassFIFO;
+    FIFO#(Word) fromMMIO <- mkBypassFIFO;
 
     Ehr#(2, Bit#(32)) pc <- mkEhr(0);
     Vector#(32, Reg#(Bit#(32))) rf <- replicateM(mkReg(0));
@@ -107,7 +107,7 @@ module mkpipelined(RVIfc);
         labelKonataLeft(lfh, iid, $format("PC %x",pc_fetched));
         // TODO implement fetch
         
-        let req = Mem {
+        let req = CacheReq {
             byte_en : 0,
             addr : pc_fetched,
             data : 0
@@ -133,7 +133,7 @@ module mkpipelined(RVIfc);
         labelKonataLeft(lfh,from_fetch.k_id, $format("decoding"));
 
         let resp = fromImem.first();
-        let instr = resp.data;
+        let instr = resp;
         let decodedInst = decodeInst(instr);
 
         if (debug) $display("[Decode] ", fshow(decodedInst));
@@ -217,7 +217,7 @@ module mkpipelined(RVIfc);
                 addr = {addr[31:2], 2'b0};
                 isUnsigned = funct3[2];
                 let type_mem = (dInst.inst[5] == 1) ? byte_en : 0;
-                let req = Mem {byte_en : type_mem,
+                let req = CacheReq {byte_en : type_mem,
                         addr : addr,
                         data : data};
                 if (isMMIO(addr)) begin 
@@ -302,7 +302,7 @@ module mkpipelined(RVIfc);
                     resp = fromDmem.first();
                     fromDmem.deq();
                 end
-                let mem_data = resp.data;
+                let mem_data = resp;
                 mem_data = mem_data >> {mem_business.offset ,3'b0};
                 case ({pack(mem_business.isUnsigned), mem_business.size}) matches
                 3'b000 : data = signExtend(mem_data[7:0]);
@@ -352,25 +352,25 @@ module mkpipelined(RVIfc);
 		    squashKonata(lfh, f);
 	endrule
 		
-    method ActionValue#(Mem) getIReq();
+    method ActionValue#(CacheReq) getIReq();
 		toImem.deq();
 		return toImem.first();
     endmethod
-    method Action getIResp(Mem a);
+    method Action getIResp(Word a);
     	fromImem.enq(a);
     endmethod
-    method ActionValue#(Mem) getDReq();
+    method ActionValue#(CacheReq) getDReq();
 		toDmem.deq();
 		return toDmem.first();
     endmethod
-    method Action getDResp(Mem a);
+    method Action getDResp(Word a);
 		fromDmem.enq(a);
     endmethod
-    method ActionValue#(Mem) getMMIOReq();
+    method ActionValue#(CacheReq) getMMIOReq();
 		toMMIO.deq();
 		return toMMIO.first();
     endmethod
-    method Action getMMIOResp(Mem a);
+    method Action getMMIOResp(Word a);
 		fromMMIO.enq(a);
     endmethod
 endmodule

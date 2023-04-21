@@ -8,7 +8,7 @@ interface Cache;
     method Action putFromProc(CacheReq e);
     method ActionValue#(Word) getToProc();
     method ActionValue#(MainMemReq) getToMem();
-    method Action putFromMem(MainMemResp e);
+    method Action putFromMem(CacheLine e);
 endinterface
 
 typedef enum {
@@ -21,8 +21,8 @@ typedef enum {
 
 module mkCache(Cache);
   BRAM_Configure cfg = defaultValue();
-  BRAM2Port#(Bit#(7), Bit#(512)) cache <- mkBRAM2Server(cfg);
-  Vector#(128, Reg#(Bit#(15))) tags <- replicateM(mkReg(0));
+  BRAM2Port#(Bit#(7), CacheLine) cache <- mkBRAM2Server(cfg);
+  Vector#(128, Reg#(CacheTag)) tags <- replicateM(mkReg(0));
   Vector#(128, Reg#(Bit#(1))) dirty <- replicateM(mkReg(0));
 
   Reg#(Maybe#(CacheReq)) currentRequest <- mkReg(Invalid);
@@ -37,7 +37,7 @@ module mkCache(Cache);
   FIFO#(Word) toProcQueue <- mkFIFO;
   FIFO#(MainMemReq) toMemQueue <- mkFIFO;
 
-  Reg#(Maybe#(MainMemResp)) memResp <- mkReg(Invalid);
+  Reg#(Maybe#(CacheLine)) memResp <- mkReg(Invalid);
 
   Reg#(Bool) debug <- mkReg(False);
 
@@ -48,42 +48,29 @@ module mkCache(Cache);
     );
     let req = fromMaybe(?, currentRequest);
 
-    let tag = req.addr[25:11];
-    let index = req.addr[10:4];
-    let offset = req.addr[10:4];
+    CacheTag tag = req.addr[31:13];
+    CacheIndex index = req.addr[12:6];
+    CacheBlockOffset block_offset = req.addr[5:2];
 
-    if (req.write == 0) begin // load
+
+
+    if (req.byte_en == 0) begin // load
 
       Bool found = False;
-      Word ret = ?;
+      CacheReq ret = ?;
 
       for (Integer i = 0; i < 8; i = i + 1) begin
         if (found == False && storeBuffValid[i] == True && req.addr == storeBuff[i].addr) begin
+          // TODO if req.byte_en != 4'b1111 then don't return 
           found = True;
-          ret = storeBuff[i].data;
+          ret = storeBuff[i];
         end
       end
-
-      // Bit#(3) deq = pack(sBuffDeq);
-      // Bit#(3) enq = pack(sBuffDeq);
-      // for (Integer i = valueOf(sBuffDeq); i < 8; i = i + 1) begin
-      //   if (found == False && storeBuffValid[i] == True && req.addr == storeBuff[i].addr) begin
-      //     found = True;
-      //     ret = storeBuff[i].data;
-      //   end
-      // end
-      // for (Integer i = 0; i < valueOf(sBuffEnq); i = i + 1) begin
-      //   if (found == False && storeBuffValid[i] == True && req.addr == storeBuff[i].addr) begin
-      //     found = True;
-      //     ret = storeBuff[i].data;
-      //   end
-      // end
 
       if (found == True) begin
         if (debug) $display("%x found in sbuff", req.addr);
 
-        Bit#(9) start_idx = 511 - zeroExtend(offset) * 32;
-        toProcQueue.enq(ret[start_idx:start_idx - 31]);
+        toProcQueue.enq(ret.data);
 
         currentRequest <= tagged Invalid;
 
@@ -126,25 +113,21 @@ module mkCache(Cache);
 
   rule getHit if (state == Hit); // load/store hit
     if (debug) $display("load hit");
-    Bit#(512) a <- cache.portA.response.get();
+    CacheLine cacheLine <- cache.portA.response.get();
 
     let req = fromMaybe(?, currentRequest);
-    let index = req.addr[10:4];
-    let offset = req.addr[3:0];
+    CacheIndex index = req.addr[12:6];
+    CacheBlockOffset offset = req.addr[5:2];
 
-    Bit#(9) start_idx = 511 - zeroExtend(offset) * 32;
-
-    if (req.write == 0) begin
-      toProcQueue.enq(a[start_idx:start_idx - 31]);
+    if (req.byte_en == 0) begin // Load
+      toProcQueue.enq(cacheLine[offset]);
     end else begin
-      for (Bit#(9) i = 0; i < 32; i = i + 1) begin
-        a[start_idx - i] = req.data[31 - i];
-      end
+      cacheLine[offset] = req.data;
 
       let newLine = BRAMRequest{
         write: True,
         address: index,
-        datain: a,
+        datain: cacheLine,
         responseOnWrite: False
       };
       cache.portA.request.put(newLine);
@@ -156,19 +139,17 @@ module mkCache(Cache);
   rule writeback if (state == Writeback);
     let req = fromMaybe(?, currentRequest);
     if (debug) $display("%x start miss", req.addr);
-    let index = req.addr[10:4];
-    let offset = req.addr[3:0];
+    CacheIndex index = req.addr[12:6];
+    CacheBlockOffset offset = req.addr[5:2];
 
-    LineAddr addr = {tags[index], index, offset};
+    LineAddr addr = {tags[index], index};
     
-    Bit#(9) start_idx = 511 - zeroExtend(offset) * 32;
-
-    let a <- cache.portA.response.get();
+    CacheLine writeBackLine <- cache.portA.response.get();
 
     toMemQueue.enq(MainMemReq{
-      write: 1,
+      write: True,
       addr: addr,
-      data: a
+      data: writeBackLine
     });
 
     state <= SendFillReq;
@@ -179,8 +160,8 @@ module mkCache(Cache);
     if (debug) $display("%x send fill", req.addr);
 
     toMemQueue.enq(MainMemReq{
-      write: 0,
-      addr: req.addr,
+      write: False,
+      addr: req.addr[31:6], // LineAddr
       data: ?
     });
     
@@ -191,22 +172,18 @@ module mkCache(Cache);
     let req = fromMaybe(?, currentRequest);
     if (debug) $display("%x wait fill", req.addr);
 
-    let tag = req.addr[25:11];
-    let index = req.addr[10:4];
-    let offset = req.addr[3:0];
+    CacheTag tag = req.addr[31:13];
+    CacheIndex index = req.addr[12:6];
+    CacheBlockOffset block_offset = req.addr[5:2];
 
-    Bit#(9) start_idx = 511 - zeroExtend(offset) * 32;
+    CacheLine resp = fromMaybe(?, memResp);
 
-    MainMemResp resp = fromMaybe(?, memResp);
-
-    if (req.write == 0) begin
-      toProcQueue.enq(resp[start_idx:start_idx - 31]);
+    if (req.byte_en == 0) begin // Read
+      toProcQueue.enq(resp[block_offset]);
       memResp <= tagged Invalid;
 
-    end else if (req.write == 1) begin
-      for (Bit#(9) i = 0; i < 32; i = i + 1) begin
-        resp[start_idx - i] = req.data[31 - i];
-      end
+    end else begin // Write
+      resp[index] = req.data;
 
       let newLine = BRAMRequest{
         write: True,
@@ -230,9 +207,9 @@ module mkCache(Cache);
     );
     let req = storeBuff[sBuffDeq];
     if (debug) $display("%x store buff", req.addr);
-    let tag = req.addr[25:11];
-    let index = req.addr[10:4];
-    let offset = req.addr[3:0];
+    CacheTag tag = req.addr[31:13];
+    CacheIndex index = req.addr[12:6];
+    CacheBlockOffset offset = req.addr[5:2];
 
     if (tags[index] == tag) begin // store hit
       let hit = BRAMRequest{
@@ -279,13 +256,13 @@ module mkCache(Cache);
 
   method ActionValue#(MainMemReq) getToMem();
     let req = toMemQueue.first();
-    if (debug && req.write == 1) $display("%x get to mem", req.addr, req.data);
+    if (debug && req.write) $display("%x get to mem", req.addr, req.data);
     else if (debug) $display("%x get to mem", req.addr);
     toMemQueue.deq();
     return req;
   endmethod
 
-  method Action putFromMem(MainMemResp e);
+  method Action putFromMem(CacheLine e);
     memResp <= tagged Valid e;
     if (debug) $display("%x returned from mem", e);
   endmethod
