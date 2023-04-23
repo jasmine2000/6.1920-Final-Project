@@ -46,9 +46,8 @@ module mkBeveren(Empty);
 
        if ( newreq.write == 0) counterIn <= counterIn + 1;
        else begin
-        let offset = newreq.addr[10:4];
-        Bit#(9) start_idx = 511 - zeroExtend(offset) * 32;
-        cachereq.data = newreq.data[start_idx:start_idx - 32];
+        let address = getAddressFields(newreq.addr);
+        cachereq.data = newreq.data[address.start_idx:address.end_idx];
        end
 
        mainRef.put(newreq);
