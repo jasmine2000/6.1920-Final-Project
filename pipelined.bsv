@@ -258,7 +258,9 @@ module mkpipelined(RVIfc);
             e2wQueue.enq(E2W { 
                 dinst: dInst,
                 k_id: from_decode.k_id,
-                valid: False
+                valid: False,
+                data: ?,
+                mem_business: ?
             });
             squashed.enq(current_id);
         end

@@ -76,7 +76,7 @@ module mktop_pipelined(Empty);
         let req <- cacheData.getToMem();
         if (debug) $display("Get DReq from Cache ", fshow(req));
         dreq <= req;
-        bram.portB.request.put(BRAMRequest{
+        bram.portA.request.put(BRAMRequest{
                     write: req.write,
                     responseOnWrite: True,
                     address: req.addr,
@@ -90,14 +90,14 @@ module mktop_pipelined(Empty);
     endrule
 
     rule responseDMemToCache;
-        let x <- bram.portB.response.get();
+        let x <- bram.portA.response.get();
         let req = dreq;
         if (debug) $display("Get DResp from Mem", fshow(req), fshow(x));
         req.data = x;
         cacheData.putFromMem(x);
     endrule
 
-    // TODO update request model to skip directly to MMIO (think it already works)
+    
     rule requestMMIO;
         CacheReq req <- rv_core.getMMIOReq;
         if (debug) $display("Get MMIOReq", fshow(req));

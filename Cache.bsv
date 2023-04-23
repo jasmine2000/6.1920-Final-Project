@@ -45,6 +45,7 @@ module mkCache(Cache);
   Vector#(8, Reg#(Bool)) storeBuffValid <- replicateM(mkReg(False));
   Reg#(Bit#(3)) sBuffEnq <- mkReg(0);
   Reg#(Bit#(3)) sBuffDeq <- mkReg(0);
+  Reg#(Bit#(4)) sBuffCnt <- mkReg(0);
 
   Reg#(Mshr) state <- mkReg(Ready);
 
@@ -73,12 +74,15 @@ module mkCache(Cache);
       Word ret = ?;
 
       // TODO : FIX SBUFF
-      for (Integer i = 0; i < 8; i = i + 1) begin
-        if (found == False && storeBuffValid[i] == True && req.addr == storeBuff[i].addr) begin
-          found = True;
-          ret = storeBuff[i].data;
-        end
+      for (Bit#(4) i = 0; (i)<sBuffCnt; i=i+1)
+      begin
+          if (req.addr == storeBuff[sBuffDeq + i[2:0]].addr)
+          begin
+            ret = storeBuff[sBuffDeq + i[2:0]].data;
+            found = True;
+          end
       end
+
 
       if (found == True) begin
         if (debug) $display("%x found in sbuff", req.addr);
@@ -119,6 +123,7 @@ module mkCache(Cache);
       storeBuff[sBuffEnq] <= req;
       storeBuffValid[sBuffEnq] <= True;
       sBuffEnq <= sBuffEnq + 1;
+      sBuffCnt <= sBuffCnt + 1;
       currentRequest <= tagged Invalid;
     end
   endrule
@@ -270,6 +275,7 @@ module mkCache(Cache);
 
     sBuffDeq <= sBuffDeq + 1;
     storeBuffValid[sBuffDeq] <= False;
+    sBuffCnt <= sBuffCnt - 1;
   endrule
 
   method Action putFromProc(CacheReq e) if (
