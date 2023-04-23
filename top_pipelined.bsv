@@ -12,13 +12,13 @@ import Cache::*;
 
 
 module mktop_pipelined(Empty);
-    // From beveren TODO double check purpose of all of these
+    // Instantiate Cache
     Cache cacheInstruction <- mkCache;
     Cache cacheData <- mkCache;
     
     // Instantiate the dual ported memory
     BRAM_Configure cfg = defaultValue();
-    cfg.loadFormat = tagged Hex "mem.vmh";
+    cfg.loadFormat = tagged Hex "memlines.vmh";
     BRAM2Port#(LineAddr, CacheLine) bram <- mkBRAM2Server(cfg);
 
     RVIfc rv_core <- mkpipelined;
