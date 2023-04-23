@@ -48,7 +48,7 @@ module mkMainMem(MainMem);
     endrule
 
     method Action put(MainMemReq req);
-        let address = req.addr >> 4;
+        let address = req.addr;
         bram.portA.request.put(BRAMRequest{
                     write: req.write,
                     responseOnWrite: False,
