@@ -8,7 +8,7 @@ import Cache::*;
 
 interface MainMem;
     method Action put(MainMemReq req);
-    method ActionValue#(MainMemResp) get();
+    method ActionValue#(CacheLine) get();
     method ActionValue#(Word) getWord();
 endinterface
 
@@ -23,12 +23,12 @@ module mkMainMemFast(MainMem);
     endrule    
 
     method Action put(MainMemReq req);
-        let address = getAddressFields(req.addr);
+        let offset = req.addr[5:2];
         bram.portA.request.put(BRAMRequest{
-                    write: unpack(req.write),
+                    write: req.write,
                     responseOnWrite: False,
                     address: req.addr,
-                    datain: req.data[address.start_idx:address.end_idx]});
+                    datain: req.data[offset]});
     endmethod
 
     method ActionValue#(Word) getWord();
@@ -39,8 +39,8 @@ endmodule
 
 module mkMainMem(MainMem);
     BRAM_Configure cfg = defaultValue();
-    BRAM1Port#(LineAddr, Bit#(512)) bram <- mkBRAM1Server(cfg);
-    DelayLine#(40, MainMemResp) dl <- mkDL(); // Delay by 20 cycles
+    BRAM1Port#(LineAddr, CacheLine) bram <- mkBRAM1Server(cfg);
+    DelayLine#(40, CacheLine) dl <- mkDL(); // Delay by 20 cycles
 
     rule deq;
         let r <- bram.portA.response.get();
@@ -50,13 +50,13 @@ module mkMainMem(MainMem);
     method Action put(MainMemReq req);
         let address = req.addr >> 4;
         bram.portA.request.put(BRAMRequest{
-                    write: unpack(req.write),
+                    write: req.write,
                     responseOnWrite: False,
                     address: address,
                     datain: req.data});
     endmethod
 
-    method ActionValue#(MainMemResp) get();
+    method ActionValue#(CacheLine) get();
         let r <- dl.get();
         return r;
     endmethod

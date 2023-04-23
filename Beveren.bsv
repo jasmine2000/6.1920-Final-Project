@@ -38,16 +38,22 @@ module mkBeveren(Empty);
        MainMemReq newreq = newrand;
        newreq.addr = {0,newreq.addr[13:2],2'b0};
        
+       let byte_en = 0;
+       case (newreq.write) matches
+        False: byte_en = 4'b0000;
+        True: byte_en = 4'b1111;
+       endcase
+
        CacheReq cachereq = CacheReq{
-        write: newreq.write,
-        addr: newreq.addr,
+        byte_en: byte_en,
+        addr: zeroExtend(newreq.addr),
         data: ?
        };
 
-       if ( newreq.write == 0) counterIn <= counterIn + 1;
+       if ( newreq.write == False) counterIn <= counterIn + 1;
        else begin
-        let address = getAddressFields(newreq.addr);
-        cachereq.data = newreq.data[address.start_idx:address.end_idx];
+       CacheBlockOffset block_offset = newreq.addr[5:2];
+       cachereq.data = newreq.data[block_offset];
        end
 
        mainRef.put(newreq);
