@@ -4,42 +4,55 @@ import SpecialFIFOs::*;
 import MemTypes::*;
 import Vector::*;
 
+typedef struct {
+    Bit#(15) tag;
+    Bit#(7) index;
+    Bit#(4) offset;
+    Bit#(9) start_idx;
+    Bit#(9) end_idx;
+} Address deriving (FShow);
+
+function Address getAddressFields(Bit#(26) address);
+    return Address {
+        tag: address[25:11],
+        index: address[10:4],
+        offset: address[3:0],
+        start_idx: 511 - zeroExtend(address[3:0]) * 32,
+        end_idx: 480 - zeroExtend(address[3:0]) * 32
+    };
+endfunction
+
 interface Cache;
-    method Action putFromProc(MainMemReq e);
-    method ActionValue#(MainMemResp) getToProc();
+    method Action putFromProc(CacheReq e);
+    method ActionValue#(Word) getToProc();
     method ActionValue#(MainMemReq) getToMem();
     method Action putFromMem(MainMemResp e);
 endinterface
 
-interface SearchableQueue;
-    method Action enq(MainMemReq value);
-    method ActionValue#(MainMemReq) deq();
-    method ActionValue#(Maybe#(MainMemReq)) search(LineAddr addr);
-endinterface
-
 typedef enum {
     Ready,
-    StartMiss,
+    Hit,
+    Writeback,
     SendFillReq,
     WaitFillResp
 } Mshr deriving (Bits, Eq, FShow);
 
 module mkCache(Cache);
   BRAM_Configure cfg = defaultValue();
-  BRAM2Port#(Bit#(7), MainMemResp) cache <- mkBRAM2Server(cfg);
-  Vector#(128, Reg#(Bit#(19))) tags <- replicateM(mkReg(0));
+  BRAM2Port#(Bit#(7), Bit#(512)) cache <- mkBRAM2Server(cfg);
+  Vector#(128, Reg#(Bit#(15))) tags <- replicateM(mkReg(0));
   Vector#(128, Reg#(Bit#(1))) dirty <- replicateM(mkReg(0));
 
-  Reg#(Maybe#(MainMemReq)) currentRequest <- mkReg(Invalid);
+  Reg#(Maybe#(CacheReq)) currentRequest <- mkReg(Invalid);
 
-  Vector#(8, Reg#(MainMemReq)) storeBuff <- replicateM(mkReg(?));
+  Vector#(8, Reg#(CacheReq)) storeBuff <- replicateM(mkReg(?));
   Vector#(8, Reg#(Bool)) storeBuffValid <- replicateM(mkReg(False));
   Reg#(Bit#(3)) sBuffEnq <- mkReg(0);
   Reg#(Bit#(3)) sBuffDeq <- mkReg(0);
 
   Reg#(Mshr) state <- mkReg(Ready);
 
-  FIFO#(MainMemResp) toProcQueue <- mkFIFO;
+  FIFO#(Word) toProcQueue <- mkFIFO;
   FIFO#(MainMemReq) toMemQueue <- mkFIFO;
 
   Reg#(Maybe#(MainMemResp)) memResp <- mkReg(Invalid);
@@ -51,11 +64,19 @@ module mkCache(Cache);
     isValid(currentRequest) == True && 
     storeBuffValid[sBuffEnq] == False
     );
+
     let req = fromMaybe(?, currentRequest);
+    let address = getAddressFields(req.addr);
+
+    if (debug && req.write == 0) $display("read %x\n", req.addr);
+    if (debug && req.write == 1) $display("write %x, %x\n", req.addr, req.data);
+
     if (req.write == 0) begin // load
 
       Bool found = False;
-      MainMemResp ret = ?;
+      Word ret = ?;
+
+      // TODO : FIX SBUFF
       for (Integer i = 0; i < 8; i = i + 1) begin
         if (found == False && storeBuffValid[i] == True && req.addr == storeBuff[i].addr) begin
           found = True;
@@ -63,47 +84,31 @@ module mkCache(Cache);
         end
       end
 
-      // for (Integer i = valueOf(sBuffDeq); i < 8; i = i + 1) begin
-      //   if (found == False && storeBuffValid[i] == True && req.addr == storeBuff[i].addr) begin
-      //     found = True;
-      //     ret = storeBuff[i].data;
-      //   end
-      // end
-      // for (Integer i = 0; i < valueOf(sBuffEnq); i = i + 1) begin
-      //   if (found == False && storeBuffValid[i] == True && req.addr == storeBuff[i].addr) begin
-      //     found = True;
-      //     ret = storeBuff[i].data;
-      //   end
-      // end
-
       if (found == True) begin
         if (debug) $display("%x found in sbuff", req.addr);
-        toProcQueue.enq(ret);
+        toProcQueue.enq(ret[address.start_idx:address.end_idx]);
         currentRequest <= tagged Invalid;
 
       end else begin
 
-        let tag = req.addr[25:7];
-        let index = req.addr[6:0];
-
-        if (tags[index] == tag) begin // load hit
+        if (tags[address.index] == address.tag) begin // load hit
           if (debug) $display("%x req load hit", req.addr);
           let hit = BRAMRequest{
             write: False,
-            address: index,
+            address: address.index,
             datain: ?,
             responseOnWrite: False
           };
           cache.portA.request.put(hit);
-          currentRequest <= tagged Invalid;
+          state <= Hit;
 
         end else begin // load miss
           if (debug) $display("%x req load miss", req.addr);
-          if (dirty[index] == 1) begin
-            state <= StartMiss;
+          if (dirty[address.index] == 1) begin
+            state <= Writeback;
             let dirtyLine = BRAMRequest{
               write: False,
-              address: index,
+              address: address.index,
               datain: ?,
               responseOnWrite: False
             };
@@ -121,17 +126,44 @@ module mkCache(Cache);
     end
   endrule
 
-  rule getHit if (state == Ready); // load hit
+  rule getHit if (state == Hit); // load/store hit
     if (debug) $display("load hit");
-    let a <- cache.portA.response.get();
-    toProcQueue.enq(a);
+    Bit#(512) a <- cache.portA.response.get();
+
+    let req = fromMaybe(?, currentRequest);
+    let address = getAddressFields(req.addr);
+
+    if (req.write == 0) begin
+      toProcQueue.enq(a[address.start_idx:address.end_idx]);
+    end else begin
+      if (debug) $display("writing %x to %x", req.data, a);
+      for (Bit#(9) i = 0; i < 32; i = i + 1) begin
+        a[address.start_idx - i] = req.data[31 - i];
+      end
+      if (debug) $display("done writing %x", a);
+
+      let newLine = BRAMRequest{
+        write: True,
+        address: address.index,
+        datain: a,
+        responseOnWrite: False
+      };
+      cache.portA.request.put(newLine);
+      dirty[address.index] <= 1;
+    end
+    currentRequest <= tagged Invalid;
+    state <= Ready;
   endrule
 
-  rule startingMiss if (state == StartMiss);
+  rule writeback if (state == Writeback);
     let req = fromMaybe(?, currentRequest);
+    let address = getAddressFields(req.addr);
+
     if (debug) $display("%x start miss", req.addr);
-    let index = req.addr[6:0];
-    LineAddr addr = {tags[index], index};
+
+    LineAddr addr = {tags[address.index], address.index, address.offset};
+    
+    Bit#(9) start_idx = 511 - zeroExtend(address.offset) * 32;
 
     let a <- cache.portA.response.get();
 
@@ -141,51 +173,54 @@ module mkCache(Cache);
       data: a
     });
 
-    if (req.write == 0) state <= SendFillReq;
-    else state <= WaitFillResp;
+    state <= SendFillReq;
   endrule
 
   rule sendingFillReq if (state == SendFillReq);
     let req = fromMaybe(?, currentRequest);
     if (debug) $display("%x send fill", req.addr);
-    if (req.write == 0)
-      toMemQueue.enq(MainMemReq{
-        write: 0,
-        addr: req.addr,
-        data: ?
-      });
-    else
-      toMemQueue.enq(MainMemReq{
-        write: 1,
-        addr: req.addr,
-        data: req.data
-      });
+
+    toMemQueue.enq(MainMemReq{
+      write: 0,
+      addr: req.addr,
+      data: ?
+    });
+    
     state <= WaitFillResp;
   endrule
 
-  rule waitingFillResp if (state == WaitFillResp);
+  rule waitingFillResp if (state == WaitFillResp && isValid(memResp));
     let req = fromMaybe(?, currentRequest);
+    let address = getAddressFields(req.addr);
+
     if (debug) $display("%x wait fill", req.addr);
-    if (req.write == 0 && isValid(memResp)) begin
-      toProcQueue.enq(fromMaybe(?, memResp));
-      memResp <= tagged Invalid;
-      currentRequest <= tagged Invalid;
-      state <= Ready;
+
+    MainMemResp resp = fromMaybe(?, memResp);
+
+    if (req.write == 0) begin
+      toProcQueue.enq(resp[address.start_idx:address.end_idx]);
+
     end else if (req.write == 1) begin
-      let tag = req.addr[25:7];
-      let index = req.addr[6:0];
+      if (debug) $display("old line: %x", resp);
+      for (Bit#(9) i = 0; i < 32; i = i + 1) begin
+        resp[address.start_idx - i] = req.data[31 - i];
+      end
+      if (debug) $display("new line: %x", resp);
+
       let newLine = BRAMRequest{
         write: True,
-        address: index,
-        datain: req.data,
+        address: address.index,
+        datain: resp,
         responseOnWrite: False
       };
       cache.portA.request.put(newLine);
-      tags[index] <= tag;
-      dirty[index] <= 1;
-      currentRequest <= tagged Invalid;
-      state <= Ready;
+      tags[address.index] <= address.tag;
+      dirty[address.index] <= 1;
     end
+
+    memResp <= tagged Invalid;
+    state <= Ready;
+    currentRequest <= tagged Invalid;
   endrule
 
   rule deqStoreBuff if (
@@ -193,27 +228,29 @@ module mkCache(Cache);
     isValid(currentRequest) == False &&
     storeBuffValid[sBuffDeq] == True
     );
-    let req = storeBuff[sBuffDeq];
-    if (debug) $display("%x store buff", req.addr);
-    let tag = req.addr[25:7];
-    let index = req.addr[6:0];
 
-    if (tags[index] == tag) begin // store hit
-      dirty[index] <= 1;
+    let req = storeBuff[sBuffDeq];
+    let address = getAddressFields(req.addr);
+
+    if (debug) $display("%x store buff", req.addr);
+
+    if (tags[address.index] == address.tag) begin // store hit
       let hit = BRAMRequest{
-        write: True,
-        address: index,
-        datain: req.data,
+        write: False,
+        address: address.index,
+        datain: ?,
         responseOnWrite: False
       };
       cache.portA.request.put(hit);
+      currentRequest <= tagged Valid req;
+      state <= Hit;
 
     end else begin // store miss
-      if (dirty[index] == 1) begin
-        state <= StartMiss;
+      if (dirty[address.index] == 1) begin
+        state <= Writeback;
         let dirtyLine = BRAMRequest{
           write: False,
-          address: index,
+          address: address.index,
           datain: ?,
           responseOnWrite: False
         };
@@ -227,7 +264,7 @@ module mkCache(Cache);
     storeBuffValid[sBuffDeq] <= False;
   endrule
 
-  method Action putFromProc(MainMemReq e) if (
+  method Action putFromProc(CacheReq e) if (
     state == Ready && 
     storeBuffValid[sBuffEnq] == False &&
     isValid(currentRequest) == False
@@ -235,7 +272,7 @@ module mkCache(Cache);
     currentRequest <= tagged Valid e;
   endmethod
 
-  method ActionValue#(MainMemResp) getToProc();
+  method ActionValue#(Word) getToProc();
     let ret = toProcQueue.first();
     toProcQueue.deq();
     return ret;

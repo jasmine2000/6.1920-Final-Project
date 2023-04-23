@@ -37,16 +37,28 @@ module mkBeveren(Empty);
        deadlockChecker <= 0;
        MainMemReq newreq = newrand;
        newreq.addr = {0,newreq.addr[13:2],2'b0};
+       
+       CacheReq cachereq = CacheReq{
+        write: newreq.write,
+        addr: newreq.addr,
+        data: ?
+       };
+
        if ( newreq.write == 0) counterIn <= counterIn + 1;
+       else begin
+        let address = getAddressFields(newreq.addr);
+        cachereq.data = newreq.data[address.start_idx:address.end_idx];
+       end
+
        mainRef.put(newreq);
-       cache.putFromProc(newreq);
+       cache.putFromProc(cachereq);
     endrule
 
     rule resps;
        counterOut <= counterOut + 1; 
        if (verbose) $display("Got response\n");
        let resp1 <- cache.getToProc() ;
-       let resp2 <- mainRef.get();
+       let resp2 <- mainRef.getWord();
        if (resp1 != resp2) begin
            $display("The cache answered %x instead of %x\n", resp1, resp2);
            $display("FAILED\n");
