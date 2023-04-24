@@ -3,6 +3,7 @@ import FIFO::*;
 import SpecialFIFOs::*;
 import MemTypes::*;
 import Vector::*;
+import Ehr::*;
 
 typedef struct {
     CacheTag tag;
@@ -39,7 +40,7 @@ module mkCache(Cache);
   Vector#(128, Reg#(CacheTag)) tags <- replicateM(mkReg('hfff));
   Vector#(128, Reg#(Bit#(1))) dirty <- replicateM(mkReg(0));
 
-  Reg#(Maybe#(CacheReq)) currentRequest <- mkReg(Invalid);
+  Ehr#(2, Maybe#(CacheReq)) currentRequest <- mkEhr(Invalid);
 
   Vector#(8, Reg#(CacheReq)) storeBuff <- replicateM(mkReg(?));
   Vector#(8, Reg#(Bool)) storeBuffValid <- replicateM(mkReg(False));
@@ -49,8 +50,8 @@ module mkCache(Cache);
 
   Reg#(Mshr) state <- mkReg(Ready);
 
-  FIFO#(Word) toProcQueue <- mkFIFO;
-  FIFO#(MainMemReq) toMemQueue <- mkFIFO;
+  FIFO#(Word) toProcQueue <- mkBypassFIFO;
+  FIFO#(MainMemReq) toMemQueue <- mkBypassFIFO;
 
   Reg#(Maybe#(CacheLine)) memResp <- mkReg(Invalid);
 
@@ -58,11 +59,11 @@ module mkCache(Cache);
 
   rule newReq if (
     state == Ready &&
-    isValid(currentRequest) == True && 
+    isValid(currentRequest[1]) == True && 
     storeBuffValid[sBuffEnq] == False
     );
 
-    let req = fromMaybe(?, currentRequest);
+    let req = fromMaybe(?, currentRequest[1]);
     let address = getAddressFields(req.addr);
 
     if (debug && req.byte_en == 0) $display("read %x\n", req.addr);
@@ -87,7 +88,7 @@ module mkCache(Cache);
       if (found == True) begin
         if (debug) $display("%x found in sbuff", req.addr);
         toProcQueue.enq(ret);
-        currentRequest <= tagged Invalid;
+        currentRequest[1] <= tagged Invalid;
 
       end else begin // Not found in SBuffer
 
@@ -124,7 +125,7 @@ module mkCache(Cache);
       storeBuffValid[sBuffEnq] <= True;
       sBuffEnq <= sBuffEnq + 1;
       sBuffCnt <= sBuffCnt + 1;
-      currentRequest <= tagged Invalid;
+      currentRequest[1] <= tagged Invalid;
     end
   endrule
 
@@ -132,7 +133,7 @@ module mkCache(Cache);
     if (debug) $display("load hit");
     CacheLine lineResp <- cache.portA.response.get();
 
-    let req = fromMaybe(?, currentRequest);
+    let req = fromMaybe(?, currentRequest[1]);
     let address = getAddressFields(req.addr);
 
     if (req.byte_en == 0) begin // Load
@@ -154,12 +155,12 @@ module mkCache(Cache);
       cache.portA.request.put(newLine);
       dirty[address.index] <= 1;
     end
-    currentRequest <= tagged Invalid;
+    currentRequest[1] <= tagged Invalid;
     state <= Ready;
   endrule
 
   rule writeback if (state == Writeback);
-    let req = fromMaybe(?, currentRequest);
+    let req = fromMaybe(?, currentRequest[1]);
     let address = getAddressFields(req.addr);
 
     if (debug) $display("%x start miss", req.addr);
@@ -178,7 +179,7 @@ module mkCache(Cache);
   endrule
 
   rule sendingFillReq if (state == SendFillReq);
-    let req = fromMaybe(?, currentRequest);
+    let req = fromMaybe(?, currentRequest[1]);
     let address = getAddressFields(req.addr);
     if (debug) $display("%x send fill", req.addr);
 
@@ -194,7 +195,7 @@ module mkCache(Cache);
   endrule
 
   rule waitingFillResp if (state == WaitFillResp && isValid(memResp));
-    let req = fromMaybe(?, currentRequest);
+    let req = fromMaybe(?, currentRequest[1]);
     let address = getAddressFields(req.addr);
 
     if (debug) $display("%x wait fill", req.addr);
@@ -233,12 +234,12 @@ module mkCache(Cache);
 
     memResp <= tagged Invalid;
     state <= Ready;
-    currentRequest <= tagged Invalid;
+    currentRequest[1] <= tagged Invalid;
   endrule
 
   rule deqStoreBuff if (
     state == Ready && 
-    isValid(currentRequest) == False &&
+    isValid(currentRequest[1]) == False &&
     storeBuffValid[sBuffDeq] == True
     );
 
@@ -255,7 +256,7 @@ module mkCache(Cache);
         responseOnWrite: False
       };
       cache.portA.request.put(hit);
-      currentRequest <= tagged Valid req;
+      currentRequest[1] <= tagged Valid req;
       state <= Hit;
 
     end else begin // store miss
@@ -270,7 +271,7 @@ module mkCache(Cache);
         cache.portA.request.put(dirtyLine);
       end else state <= SendFillReq;
 
-      currentRequest <= tagged Valid req;
+      currentRequest[1] <= tagged Valid req;
     end
 
     sBuffDeq <= sBuffDeq + 1;
@@ -281,9 +282,9 @@ module mkCache(Cache);
   method Action putFromProc(CacheReq e) if (
     state == Ready && 
     storeBuffValid[sBuffEnq] == False &&
-    isValid(currentRequest) == False
+    isValid(currentRequest[0]) == False
     );
-    currentRequest <= tagged Valid e;
+    currentRequest[0] <= tagged Valid e;
   endmethod
 
   method ActionValue#(Word) getToProc();

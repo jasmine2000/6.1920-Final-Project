@@ -73,7 +73,7 @@ module mkpipelined(RVIfc);
     Ehr#(2, Bit#(1)) epoch <- mkEhr(1'b0);
     Vector#(32, Ehr#(2, Bit#(2))) scoreboard <- replicateM(mkEhr(0));
 
-    Bool debug = True;
+    Bool debug = False;
 
 	// Code to support Konata visualization
     String dumpFile = "output.log" ;
@@ -83,9 +83,9 @@ module mkpipelined(RVIfc);
 
 	FIFO#(KonataId) retired <- mkFIFO;
 	FIFO#(KonataId) squashed <- mkFIFO;
-
     
     Reg#(Bool) starting <- mkReg(True);
+
 	rule do_tic_logging;
         if (starting) begin
             let f <- $fopen(dumpFile, "w") ;
@@ -300,7 +300,7 @@ module mkpipelined(RVIfc);
                 if (mem_business.mmio) begin 
                     resp = fromMMIO.first();
                     fromMMIO.deq();
-                end else begin 
+                end else if (dInst.inst[5] == 0) begin 
                     resp = fromDmem.first();
                     fromDmem.deq();
                 end
