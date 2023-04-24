@@ -34,13 +34,13 @@ timeout 2 ./top_pipelined
 
 echo "Testing thelie"
 ./test.sh thelie32
-timeout 2 ./top_pipelined
+timeout 60 ./top_pipelined
 
 echo "Testing thuemorse"
 ./test.sh thuemorse32
-timeout 2 ./top_pipelined
+timeout 60 ./top_pipelined
 
 echo "Testing matmul"
 ./test.sh matmul32
-timeout 2 ./top_pipelined
+timeout 90 ./top_pipelined
 

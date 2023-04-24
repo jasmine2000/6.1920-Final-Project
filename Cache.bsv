@@ -142,7 +142,17 @@ module mkCache(Cache);
       if (debug) $display("writing %x to %x", req.data, lineResp);
       
       // TODO, byte enable in this line
-      lineResp[address.blockOffset] = req.data;
+
+      Bit#(32) mask = ?;
+      for (Integer i = 0; i < 4; i = i + 1)
+      begin
+        for (Integer j = 0; j < 8; j = j + 1)
+        begin
+          mask[8*i + j] = req.byte_en[i];
+        end
+      end
+
+      lineResp[address.blockOffset] = (lineResp[address.blockOffset] & (~mask) ) | (req.data & mask);
     
       if (debug) $display("done writing %x", lineResp);
 
