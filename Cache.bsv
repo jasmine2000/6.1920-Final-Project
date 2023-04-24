@@ -36,9 +36,10 @@ typedef enum {
 
 module mkCache(Cache);
   BRAM_Configure cfg = defaultValue();
-  BRAM2Port#(Bit#(7), CacheLine) cache <- mkBRAM2Server(cfg);
-  Vector#(128, Reg#(CacheTag)) tags <- replicateM(mkReg('hfff));
-  Vector#(128, Reg#(Bit#(1))) dirty <- replicateM(mkReg(0));
+  
+  Vector#(4, BRAM2Port#(Bit#(7), CacheLine) ) cache <- replicateM(mkBRAM2Server(cfg));
+  Vector#(4, Vector#(128, Reg#(CacheTag))) tags <- replicateM(replicateM(mkReg('hfff)));
+  Vector#(4, Vector#(128, Reg#(Bit#(1)))) dirty <- replicateM(replicateM(mkReg(0)));
 
   Ehr#(2, Maybe#(CacheReq)) currentRequest <- mkEhr(Invalid);
 
@@ -54,6 +55,7 @@ module mkCache(Cache);
   FIFO#(MainMemReq) toMemQueue <- mkBypassFIFO;
 
   Reg#(Maybe#(CacheLine)) memResp <- mkReg(Invalid);
+  Reg#(Bit#(2)) currentWay <- mkReg(0);
 
   Reg#(Bool) debug <- mkReg(False);
 
@@ -92,21 +94,41 @@ module mkCache(Cache);
 
       end else begin // Not found in SBuffer
 
-        if (tags[address.index] == address.tag) begin // load hit
+        // search all sets for matching tag
+        Bool hit = False;
+        Integer way = ?;
+        
+        for (Integer i = 0; i < 4; i = i+1)
+        begin
+          if (tags[i][address.index] == address.tag) 
+          begin
+            hit = True;
+            way = i;
+          end
+        end
+
+        
+
+        if (hit) begin // load hit
           if (debug) $display("%x req load hit", req.addr);
           // Read Line from BRAM
-          let hit = BRAMRequest{
+          let hitreq = BRAMRequest{
             write: False,
             address: address.index,
             datain: ?,
             responseOnWrite: False
           };
-          cache.portA.request.put(hit);
+          cache[way].portA.request.put(hitreq);
           state <= Hit;
+          currentWay <= fromInteger(way);
 
         end else begin // load miss
           if (debug) $display("%x req load miss", req.addr);
-          if (dirty[address.index] == 1) begin
+          
+          Bit#(2) newWay = currentWay + 1; // TODO replacement policy
+          currentWay <= newWay;
+
+          if (dirty[newWay][address.index] == 1) begin
             state <= Writeback;
             let dirtyLine = BRAMRequest{
               write: False,
@@ -114,7 +136,7 @@ module mkCache(Cache);
               datain: ?,
               responseOnWrite: False
             };
-            cache.portA.request.put(dirtyLine);
+            cache[newWay].portA.request.put(dirtyLine);
           end else state <= SendFillReq;
         end
       end
@@ -131,7 +153,7 @@ module mkCache(Cache);
 
   rule getHit if (state == Hit); // load/store hit
     if (debug) $display("load hit");
-    CacheLine lineResp <- cache.portA.response.get();
+    CacheLine lineResp <- cache[currentWay].portA.response.get();
 
     let req = fromMaybe(?, currentRequest[1]);
     let address = getAddressFields(req.addr);
@@ -140,8 +162,7 @@ module mkCache(Cache);
       toProcQueue.enq(lineResp[address.blockOffset]);
     end else begin
       if (debug) $display("writing %x to %x", req.data, lineResp);
-      
-      // TODO, byte enable in this line
+
 
       Bit#(32) mask = ?;
       for (Integer i = 0; i < 4; i = i + 1)
@@ -162,8 +183,8 @@ module mkCache(Cache);
         datain: lineResp,
         responseOnWrite: False
       };
-      cache.portA.request.put(newLine);
-      dirty[address.index] <= 1;
+      cache[currentWay].portA.request.put(newLine);
+      dirty[currentWay][address.index] <= 1;
     end
     currentRequest[1] <= tagged Invalid;
     state <= Ready;
@@ -175,9 +196,9 @@ module mkCache(Cache);
 
     if (debug) $display("%x start miss", req.addr);
 
-    LineAddr addr = {tags[address.index], address.index};
+    LineAddr addr = {tags[currentWay][address.index], address.index};
 
-    let lineResp <- cache.portA.response.get();
+    let lineResp <- cache[currentWay].portA.response.get();
 
     toMemQueue.enq(MainMemReq{
       write: True,
@@ -221,9 +242,9 @@ module mkCache(Cache);
         datain: resp,
         responseOnWrite: False
       };
-      cache.portA.request.put(newLine);
-      tags[address.index] <= address.tag;
-      dirty[address.index] <= 0;
+      cache[currentWay].portA.request.put(newLine);
+      tags[currentWay][address.index] <= address.tag;
+      dirty[currentWay][address.index] <= 0;
 
     end else begin
       if (debug) $display("old line: %x", resp);
@@ -237,9 +258,9 @@ module mkCache(Cache);
         datain: resp,
         responseOnWrite: False
       };
-      cache.portA.request.put(newLine);
-      tags[address.index] <= address.tag;
-      dirty[address.index] <= 1;
+      cache[currentWay].portA.request.put(newLine);
+      tags[currentWay][address.index] <= address.tag;
+      dirty[currentWay][address.index] <= 1;
     end
 
     memResp <= tagged Invalid;
@@ -258,19 +279,37 @@ module mkCache(Cache);
 
     if (debug) $display("%x store buff", req.addr);
 
-    if (tags[address.index] == address.tag) begin // store hit
-      let hit = BRAMRequest{
+    Bool hit = False;
+    Integer way = ?;
+    
+    for (Integer i = 0; i < 4; i = i+1)
+    begin
+      if (tags[i][address.index] == address.tag) 
+      begin
+        hit = True;
+        way = i;
+      end
+    end
+
+    if (hit) begin // store hit
+      let hitReq = BRAMRequest{
         write: False,
         address: address.index,
         datain: ?,
         responseOnWrite: False
       };
-      cache.portA.request.put(hit);
+      cache[way].portA.request.put(hitReq);
       currentRequest[1] <= tagged Valid req;
       state <= Hit;
 
+      currentWay <= fromInteger(way);
+
     end else begin // store miss
-      if (dirty[address.index] == 1) begin
+      
+      Bit#(2) newWay = currentWay + 1; // TODO replacement policy
+      currentWay <= newWay;
+
+      if (dirty[newWay][address.index] == 1) begin
         state <= Writeback;
         let dirtyLine = BRAMRequest{
           write: False,
@@ -278,7 +317,7 @@ module mkCache(Cache);
           datain: ?,
           responseOnWrite: False
         };
-        cache.portA.request.put(dirtyLine);
+        cache[newWay].portA.request.put(dirtyLine);
       end else state <= SendFillReq;
 
       currentRequest[1] <= tagged Valid req;

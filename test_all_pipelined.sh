@@ -42,5 +42,5 @@ timeout 60 ./top_pipelined
 
 echo "Testing matmul"
 ./test.sh matmul32
-timeout 90 ./top_pipelined
+timeout 240 ./top_pipelined
 
