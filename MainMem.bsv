@@ -23,7 +23,7 @@ module mkMainMemFast(MainMem);
     endrule    
 
     method Action put(MainMemReq req);
-        let offset = req.addr[5:2];
+        let offset = getAddressFields(req.addr).blockOffset;
         bram.portA.request.put(BRAMRequest{
                     write: req.write,
                     responseOnWrite: False,

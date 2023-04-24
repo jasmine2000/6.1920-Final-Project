@@ -52,7 +52,7 @@ module mkBeveren(Empty);
 
        if ( newreq.write == False) counterIn <= counterIn + 1;
        else begin
-       CacheBlockOffset block_offset = newreq.addr[5:2];
+       CacheBlockOffset block_offset = getAddressFields(newreq.addr).blockOffset;
        cachereq.data = newreq.data[block_offset];
        end
 
