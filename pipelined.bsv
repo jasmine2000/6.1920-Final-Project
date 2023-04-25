@@ -66,9 +66,17 @@ module mkpipelined(RVIfc);
     Ehr#(2, Bit#(32)) pc <- mkEhr(0);
     Vector#(32, Reg#(Bit#(32))) rf <- replicateM(mkReg(0));
 
-    FIFO#(F2D) f2dQueue <- mkFIFO;
-    FIFO#(D2E) d2eQueue <- mkFIFO;
-    FIFO#(E2W) e2wQueue <- mkFIFO;
+    Vector#(2, FIFO#(F2D)) f2dQueues <- replicateM(mkFIFO);
+    Reg#(Bit#(1)) f2d_enq <- mkReg(0);
+    Reg#(Bit#(1)) f2d_deq <- mkReg(0);
+
+    Vector#(2, FIFO#(D2E)) d2eQueues <- replicateM(mkFIFO);
+    Reg#(Bit#(1)) d2e_enq <- mkReg(0);
+    Reg#(Bit#(1)) d2e_deq <- mkReg(0);
+
+    Vector#(2, FIFO#(E2W)) e2wQueues <- replicateM(mkFIFO);
+    Reg#(Bit#(1)) e2w_enq <- mkReg(0);
+    Reg#(Bit#(1)) e2w_deq <- mkReg(0);
 
     Ehr#(2, Bit#(1)) epoch <- mkEhr(1'b0);
     Vector#(32, Ehr#(2, Bit#(2))) scoreboard <- replicateM(mkEhr(0));
@@ -114,21 +122,19 @@ module mkpipelined(RVIfc);
         };
         toImem.enq(req);
 
-        f2dQueue.enq(F2D { 
+        f2dQueues[f2d_enq].enq(F2D { 
             pc: pc_fetched,
             ppc: next_pc_predicted,
             epoch: epoch[1],
             k_id: iid
         });
+        f2d_enq <= f2d_enq + 1;
 
-        // This will likely end with something like:
-        // f2d.enq(F2D{ ..... k_id: iid});
-        // iid is the unique identifier used by konata, that we will pass around everywhere for each instruction
     endrule
 
     rule decode if (!starting);
-        // TODO
-        let from_fetch = f2dQueue.first();
+        let from_fetch = f2dQueues[f2d_deq].first();
+
    	    decodeKonata(lfh, from_fetch.k_id);
         labelKonataLeft(lfh,from_fetch.k_id, $format("decoding"));
 
@@ -146,13 +152,15 @@ module mkpipelined(RVIfc);
         if (scoreboard[rs1_idx][0] == 0 && 
             scoreboard[rs2_idx][0] == 0) begin // no data hazard
             
-            f2dQueue.deq();
+            f2dQueues[f2d_deq].deq();
+            f2d_deq <= f2d_deq + 1;
+
             fromImem.deq();
 
             let rs1 = (rs1_idx ==0 ? 0 : rf[rs1_idx]);
             let rs2 = (rs2_idx == 0 ? 0 : rf[rs2_idx]);
 
-            d2eQueue.enq(D2E {
+            d2eQueues[d2e_enq].enq(D2E {
                 dinst: decodedInst,
                 pc: from_fetch.pc,
                 ppc: from_fetch.ppc,
@@ -161,6 +169,7 @@ module mkpipelined(RVIfc);
                 rv2: rs2,
                 k_id: from_fetch.k_id
             });
+            d2e_enq <= d2e_enq + 1;
 
             if (decodedInst.valid_rd) begin
                 if (rd_idx != 0) begin 
@@ -169,21 +178,16 @@ module mkpipelined(RVIfc);
                 end
             end
         end
-
-        // To add a decode event in Konata you will likely do something like:
-        //  let from_fetch = f2d.first();
-   	    //	decodeKonata(lfh, from_fetch.k_id);
-        //  labelKonataLeft(lfh,from_fetch.k_id, $format("Any information you would like to put in the left pane in Konata, attached to the current instruction"));
     endrule
 
     rule execute if (!starting);
-        // TODO
-        let from_decode = d2eQueue.first();
+        let from_decode = d2eQueues[d2e_deq].first();
+        d2eQueues[d2e_deq].deq();
+        d2e_deq <= d2e_deq + 1;
+        
         let current_id = from_decode.k_id;
    	    executeKonata(lfh, current_id);
         labelKonataLeft(lfh,current_id, $format("executing"));
-
-        d2eQueue.deq();
 
         let dInst = from_decode.dinst;
         if (debug) $display("[Execute] ", fshow(dInst));
@@ -246,22 +250,24 @@ module mkpipelined(RVIfc);
             labelKonataLeft(lfh,current_id, $format(" ALU output: %x" , data));
 
             let mem_business = MemBusiness { isUnsigned : unpack(isUnsigned), size : size, offset : offset, mmio: mmio};
-            e2wQueue.enq(E2W { 
+            e2wQueues[e2w_enq].enq(E2W { 
                 mem_business: mem_business,
                 data: data,
                 dinst: dInst,
                 k_id: from_decode.k_id,
                 valid: True
             });
+            e2w_enq <= e2w_enq + 1;
 
         end else begin
-            e2wQueue.enq(E2W { 
+            e2wQueues[e2w_enq].enq(E2W { 
                 dinst: dInst,
                 k_id: from_decode.k_id,
                 valid: False,
                 data: ?,
                 mem_business: ?
             });
+            e2w_enq <= e2w_enq + 1;
             squashed.enq(current_id);
         end
 
@@ -281,12 +287,13 @@ module mkpipelined(RVIfc);
 
     rule writeback if (!starting);
         // TODO
-        let from_execute = e2wQueue.first();
+        let from_execute = e2wQueues[e2w_deq].first();
+        e2wQueues[e2w_deq].deq();
+        e2w_deq <= e2w_deq + 1;
+
         let current_id = from_execute.k_id;
    	    writebackKonata(lfh, current_id);
         labelKonataLeft(lfh,current_id, $format("writeback"));
-
-        e2wQueue.deq();
 
         let dInst = from_execute.dinst;
         let data = from_execute.data;
