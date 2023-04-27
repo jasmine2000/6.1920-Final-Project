@@ -112,7 +112,7 @@ module mkpipelined(RVIfc);
         // You should put the pc that you fetch in pc_fetched
         // Below is the code to support Konata's visualization
 		let iid <- fetch1Konata(lfh, fresh_id, 0);
-        labelKonataLeft(lfh, iid, $format("PC %x",pc_fetched));
+        labelKonataLeft(lfh, iid, $format("PC %x ",pc_fetched));
         // TODO implement fetch
         
         let req = CacheReq {
@@ -135,12 +135,12 @@ module mkpipelined(RVIfc);
     rule decode if (!starting);
         let from_fetch = f2dQueues[f2d_deq].first();
 
-   	    decodeKonata(lfh, from_fetch.k_id);
-        labelKonataLeft(lfh,from_fetch.k_id, $format("decoding"));
-
         let resp = fromImem.first();
         let instr = resp;
         let decodedInst = decodeInst(instr);
+
+        decodeKonata(lfh, from_fetch.k_id);
+        labelKonataLeft(lfh,from_fetch.k_id, $format("decoded %x ", instr));
 
         if (debug) $display("[Decode] ", fshow(decodedInst));
 
@@ -187,7 +187,7 @@ module mkpipelined(RVIfc);
         
         let current_id = from_decode.k_id;
    	    executeKonata(lfh, current_id);
-        labelKonataLeft(lfh,current_id, $format("executing"));
+        labelKonataLeft(lfh,current_id, $format("executing "));
 
         let dInst = from_decode.dinst;
         if (debug) $display("[Execute] ", fshow(dInst));
@@ -245,9 +245,10 @@ module mkpipelined(RVIfc);
             if (nextPc != from_decode.ppc) begin
                 epoch[0] <= epoch[0] + 1;
                 pc[0] <= nextPc;
+                labelKonataLeft(lfh,current_id, $format("new pc %x ", nextPc));
             end
 
-            labelKonataLeft(lfh,current_id, $format(" ALU output: %x" , data));
+            labelKonataLeft(lfh,current_id, $format("ALU output: %x " , data));
 
             let mem_business = MemBusiness { isUnsigned : unpack(isUnsigned), size : size, offset : offset, mmio: mmio};
             e2wQueues[e2w_enq].enq(E2W { 
@@ -293,7 +294,7 @@ module mkpipelined(RVIfc);
 
         let current_id = from_execute.k_id;
    	    writebackKonata(lfh, current_id);
-        labelKonataLeft(lfh,current_id, $format("writeback"));
+        labelKonataLeft(lfh,current_id, $format("writeback "));
 
         let dInst = from_execute.dinst;
         let data = from_execute.data;

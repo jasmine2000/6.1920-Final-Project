@@ -37,11 +37,12 @@ typedef enum {
 module mkICache(ICache);
   BRAM_Configure cfg = defaultValue();
   
-  Vector#(4, BRAM2Port#(Bit#(7), CacheLine) ) cache <- replicateM(mkBRAM2Server(cfg));
-  Vector#(4, Vector#(128, Reg#(CacheTag))) tags <- replicateM(replicateM(mkReg('hfff)));
-  Vector#(4, Vector#(128, Reg#(Bit#(1)))) dirty <- replicateM(replicateM(mkReg(0)));
+  BRAM2Port#(Bit#(7), CacheLine) cache <- mkBRAM2Server(cfg);
+  Vector#(128, Reg#(CacheTag)) tags <- replicateM(mkReg('hfff));
+  Vector#(128, Reg#(Bit#(1))) dirty <- replicateM(mkReg(0));
 
   Ehr#(2, Maybe#(CacheReq)) currentRequest <- mkEhr(Invalid);
+  FIFO#(CacheBlockOffset) offsetQueue <- mkFIFO;
 
   Reg#(Mshr) state <- mkReg(Ready);
 
@@ -49,7 +50,6 @@ module mkICache(ICache);
   FIFO#(MainMemReq) toMemQueue <- mkBypassFIFO;
 
   Reg#(Maybe#(CacheLine)) memResp <- mkReg(Invalid);
-  Reg#(Bit#(2)) currentWay <- mkReg(0);
 
   Reg#(Bool) debug <- mkReg(False);
 
@@ -66,22 +66,7 @@ module mkICache(ICache);
 
     if (req.byte_en == 0) begin // load
 
-        // search all sets for matching tag
-        Bool hit = False;
-        Integer way = ?;
-        
-        for (Integer i = 0; i < 4; i = i+1)
-        begin
-          if (tags[i][address.index] == address.tag) 
-          begin
-            hit = True;
-            way = i;
-          end
-        end
-
-
-        
-        if (hit) begin // load hit
+        if (tags[address.index] == address.tag) begin // load hit
           if (debug) $display("%x req load hit", req.addr);
           // Read Line from BRAM
           let hitreq = BRAMRequest{
@@ -90,17 +75,17 @@ module mkICache(ICache);
             datain: ?,
             responseOnWrite: False
           };
-          cache[way].portA.request.put(hitreq);
-          state <= Hit;
-          currentWay <= fromInteger(way);
+          cache.portA.request.put(hitreq);
 
+          state <= Hit; // old
+
+        //   offsetQueue.enq(address.blockOffset); // new
+        //   currentRequest[1] <= tagged Invalid; // new
+          
         end else begin // load miss
           if (debug) $display("%x req load miss", req.addr);
-          
-          Bit#(2) newWay = currentWay + 1; // TODO replacement policy
-          currentWay <= newWay;
 
-          if (dirty[newWay][address.index] == 1) begin
+          if (dirty[address.index] == 1) begin
             state <= Writeback;
             let dirtyLine = BRAMRequest{
               write: False,
@@ -108,31 +93,31 @@ module mkICache(ICache);
               datain: ?,
               responseOnWrite: False
             };
-            cache[newWay].portA.request.put(dirtyLine);
+            cache.portA.request.put(dirtyLine);
           end else state <= SendFillReq;
         end
 
     end else begin // Store
-        $display("illegal write");
-        $finish;
+      $display("illegal write");
+      $finish;
     end
   endrule
 
-  rule getHit if (state == Hit); // load/store hit
+//   rule getHit if (state == Ready); // new
+  rule getHit if (state == Hit); // old
     if (debug) $display("load hit");
-    CacheLine lineResp <- cache[currentWay].portA.response.get();
+    CacheLine lineResp <- cache.portA.response.get();
 
-    let req = fromMaybe(?, currentRequest[1]);
-    let address = getAddressFields(req.addr);
+    let req = fromMaybe(?, currentRequest[1]); // old
+    let offset = getAddressFields(req.addr).blockOffset; // old
 
-    if (req.byte_en == 0) begin // Load
-      toProcQueue.enq(lineResp[address.blockOffset]);
-    end else begin
-        $display("illegal write");
-        $finish;
-    end
-    currentRequest[1] <= tagged Invalid;
-    state <= Ready;
+    // let offset = offsetQueue.first(); // new
+    // offsetQueue.deq(); // new
+
+    toProcQueue.enq(lineResp[offset]);
+
+    currentRequest[1] <= tagged Invalid; // old
+    state <= Ready; // old
   endrule
 
   rule writeback if (state == Writeback);
@@ -141,9 +126,9 @@ module mkICache(ICache);
 
     if (debug) $display("%x start miss", req.addr);
 
-    LineAddr addr = {tags[currentWay][address.index], address.index};
+    LineAddr addr = {tags[address.index], address.index};
 
-    let lineResp <- cache[currentWay].portA.response.get();
+    let lineResp <- cache.portA.response.get();
 
     toMemQueue.enq(MainMemReq{
       write: True,
@@ -187,9 +172,9 @@ module mkICache(ICache);
         datain: resp,
         responseOnWrite: False
       };
-      cache[currentWay].portA.request.put(newLine);
-      tags[currentWay][address.index] <= address.tag;
-      dirty[currentWay][address.index] <= 0;
+      cache.portA.request.put(newLine);
+      tags[address.index] <= address.tag;
+      dirty[address.index] <= 0;
 
     end else begin
         $display("illegal write");
