@@ -8,12 +8,13 @@ import ClientServer::*;
 import GetPut::*;
 import Randomizable::*;
 import MemTypes::*;
+import ICache::*;
 import Cache::*;
 
 
 module mktop_pipelined(Empty);
     // Instantiate Cache
-    Cache cacheInstruction <- mkCache;
+    ICache cacheInstruction <- mkICache;
     Cache cacheData <- mkCache;
     
     // Instantiate the dual ported memory

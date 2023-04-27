@@ -19,7 +19,7 @@ function Address getAddressFields(WordAddr address);
     };
 endfunction
 
-interface Cache;
+interface ICache;
     method Action putFromProc(CacheReq e);
     method ActionValue#(Word) getToProc();
     method ActionValue#(MainMemReq) getToMem();
@@ -34,7 +34,7 @@ typedef enum {
     WaitFillResp
 } Mshr deriving (Bits, Eq, FShow);
 
-module mkCache(Cache);
+module mkICache(ICache);
   BRAM_Configure cfg = defaultValue();
   
   Vector#(4, BRAM2Port#(Bit#(7), CacheLine) ) cache <- replicateM(mkBRAM2Server(cfg));
@@ -42,12 +42,6 @@ module mkCache(Cache);
   Vector#(4, Vector#(128, Reg#(Bit#(1)))) dirty <- replicateM(replicateM(mkReg(0)));
 
   Ehr#(2, Maybe#(CacheReq)) currentRequest <- mkEhr(Invalid);
-
-  Vector#(8, Reg#(CacheReq)) storeBuff <- replicateM(mkReg(?));
-  Vector#(8, Reg#(Bool)) storeBuffValid <- replicateM(mkReg(False));
-  Reg#(Bit#(3)) sBuffEnq <- mkReg(0);
-  Reg#(Bit#(3)) sBuffDeq <- mkReg(0);
-  Reg#(Bit#(4)) sBuffCnt <- mkReg(0);
 
   Reg#(Mshr) state <- mkReg(Ready);
 
@@ -61,8 +55,7 @@ module mkCache(Cache);
 
   rule newReq if (
     state == Ready &&
-    isValid(currentRequest[1]) == True && 
-    storeBuffValid[sBuffEnq] == False
+    isValid(currentRequest[1]) == True
     );
 
     let req = fromMaybe(?, currentRequest[1]);
@@ -72,27 +65,6 @@ module mkCache(Cache);
     if (debug && req.byte_en != 0) $display("write %x, %x\n", req.addr, req.data);
 
     if (req.byte_en == 0) begin // load
-
-      Bool found = False;
-      Word ret = ?;
-
-      // TODO : FIX SBUFF
-      for (Bit#(4) i = 0; (i)<sBuffCnt; i=i+1)
-      begin
-          if (req.addr == storeBuff[sBuffDeq + i[2:0]].addr)
-          begin
-            ret = storeBuff[sBuffDeq + i[2:0]].data;
-            found = True;
-          end
-      end
-
-
-      if (found == True) begin
-        if (debug) $display("%x found in sbuff", req.addr);
-        toProcQueue.enq(ret);
-        currentRequest[1] <= tagged Invalid;
-
-      end else begin // Not found in SBuffer
 
         // search all sets for matching tag
         Bool hit = False;
@@ -139,15 +111,10 @@ module mkCache(Cache);
             cache[newWay].portA.request.put(dirtyLine);
           end else state <= SendFillReq;
         end
-      end
 
     end else begin // Store
-      if (debug) $display("%x store", req.addr);
-      storeBuff[sBuffEnq] <= req;
-      storeBuffValid[sBuffEnq] <= True;
-      sBuffEnq <= sBuffEnq + 1;
-      sBuffCnt <= sBuffCnt + 1;
-      currentRequest[1] <= tagged Invalid;
+        $display("illegal write");
+        $finish;
     end
   endrule
 
@@ -161,30 +128,8 @@ module mkCache(Cache);
     if (req.byte_en == 0) begin // Load
       toProcQueue.enq(lineResp[address.blockOffset]);
     end else begin
-      if (debug) $display("writing %x to %x", req.data, lineResp);
-
-
-      Bit#(32) mask = ?;
-      for (Integer i = 0; i < 4; i = i + 1)
-      begin
-        for (Integer j = 0; j < 8; j = j + 1)
-        begin
-          mask[8*i + j] = req.byte_en[i];
-        end
-      end
-
-      lineResp[address.blockOffset] = (lineResp[address.blockOffset] & (~mask) ) | (req.data & mask);
-    
-      if (debug) $display("done writing %x", lineResp);
-
-      let newLine = BRAMRequest{
-        write: True,
-        address: address.index,
-        datain: lineResp,
-        responseOnWrite: False
-      };
-      cache[currentWay].portA.request.put(newLine);
-      dirty[currentWay][address.index] <= 1;
+        $display("illegal write");
+        $finish;
     end
     currentRequest[1] <= tagged Invalid;
     state <= Ready;
@@ -247,20 +192,8 @@ module mkCache(Cache);
       dirty[currentWay][address.index] <= 0;
 
     end else begin
-      if (debug) $display("old line: %x", resp);
-      
-      resp[address.blockOffset] = req.data;
-      if (debug) $display("new line: %x", resp);
-
-      let newLine = BRAMRequest{
-        write: True,
-        address: address.index,
-        datain: resp,
-        responseOnWrite: False
-      };
-      cache[currentWay].portA.request.put(newLine);
-      tags[currentWay][address.index] <= address.tag;
-      dirty[currentWay][address.index] <= 1;
+        $display("illegal write");
+        $finish;
     end
 
     memResp <= tagged Invalid;
@@ -268,69 +201,8 @@ module mkCache(Cache);
     currentRequest[1] <= tagged Invalid;
   endrule
 
-  rule deqStoreBuff if (
-    state == Ready && 
-    isValid(currentRequest[1]) == False &&
-    storeBuffValid[sBuffDeq] == True
-    );
-
-    let req = storeBuff[sBuffDeq];
-    let address = getAddressFields(req.addr);
-
-    if (debug) $display("%x store buff", req.addr);
-
-    Bool hit = False;
-    Integer way = ?;
-    
-    for (Integer i = 0; i < 4; i = i+1)
-    begin
-      if (tags[i][address.index] == address.tag) 
-      begin
-        hit = True;
-        way = i;
-      end
-    end
-
-    if (hit) begin // store hit
-      let hitReq = BRAMRequest{
-        write: False,
-        address: address.index,
-        datain: ?,
-        responseOnWrite: False
-      };
-      cache[way].portA.request.put(hitReq);
-      currentRequest[1] <= tagged Valid req;
-      state <= Hit;
-
-      currentWay <= fromInteger(way);
-
-    end else begin // store miss
-      
-      Bit#(2) newWay = currentWay + 1; // TODO replacement policy
-      currentWay <= newWay;
-
-      if (dirty[newWay][address.index] == 1) begin
-        state <= Writeback;
-        let dirtyLine = BRAMRequest{
-          write: False,
-          address: address.index,
-          datain: ?,
-          responseOnWrite: False
-        };
-        cache[newWay].portA.request.put(dirtyLine);
-      end else state <= SendFillReq;
-
-      currentRequest[1] <= tagged Valid req;
-    end
-
-    sBuffDeq <= sBuffDeq + 1;
-    storeBuffValid[sBuffDeq] <= False;
-    sBuffCnt <= sBuffCnt - 1;
-  endrule
-
   method Action putFromProc(CacheReq e) if (
     state == Ready && 
-    storeBuffValid[sBuffEnq] == False &&
     isValid(currentRequest[0]) == False
     );
     currentRequest[0] <= tagged Valid e;
