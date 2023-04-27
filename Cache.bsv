@@ -37,9 +37,9 @@ typedef enum {
 module mkCache(Cache);
   BRAM_Configure cfg = defaultValue();
   
-  Vector#(4, BRAM2Port#(Bit#(7), CacheLine) ) cache <- replicateM(mkBRAM2Server(cfg));
-  Vector#(4, Vector#(128, Reg#(CacheTag))) tags <- replicateM(replicateM(mkReg('hfff)));
-  Vector#(4, Vector#(128, Reg#(Bit#(1)))) dirty <- replicateM(replicateM(mkReg(0)));
+  Vector#(1, BRAM2Port#(CacheIndex, CacheLine) ) cache <- replicateM(mkBRAM2Server(cfg));
+  Vector#(1, Vector#(128, Reg#(CacheTag))) tags <- replicateM(replicateM(mkReg('hfff)));
+  Vector#(1, Vector#(128, Reg#(Bit#(1)))) dirty <- replicateM(replicateM(mkReg(0)));
 
   Ehr#(2, Maybe#(CacheReq)) currentRequest <- mkEhr(Invalid);
 
@@ -98,7 +98,7 @@ module mkCache(Cache);
         Bool hit = False;
         Integer way = ?;
         
-        for (Integer i = 0; i < 4; i = i+1)
+        for (Integer i = 0; i < 1; i = i+1)
         begin
           if (tags[i][address.index] == address.tag) 
           begin
@@ -120,12 +120,12 @@ module mkCache(Cache);
           };
           cache[way].portA.request.put(hitreq);
           state <= Hit;
-          currentWay <= fromInteger(way);
+          currentWay <= 0;//fromInteger(way);
 
         end else begin // load miss
           if (debug) $display("%x req load miss", req.addr);
           
-          Bit#(2) newWay = currentWay + 1; // TODO replacement policy
+          Bit#(2) newWay = 0; //currentWay + 1; // TODO replacement policy
           currentWay <= newWay;
 
           if (dirty[newWay][address.index] == 1) begin
@@ -282,7 +282,7 @@ module mkCache(Cache);
     Bool hit = False;
     Integer way = ?;
     
-    for (Integer i = 0; i < 4; i = i+1)
+    for (Integer i = 0; i < 1; i = i+1)
     begin
       if (tags[i][address.index] == address.tag) 
       begin
@@ -306,7 +306,7 @@ module mkCache(Cache);
 
     end else begin // store miss
       
-      Bit#(2) newWay = currentWay + 1; // TODO replacement policy
+      Bit#(2) newWay = 0;//currentWay + 1; // TODO replacement policy
       currentWay <= newWay;
 
       if (dirty[newWay][address.index] == 1) begin
