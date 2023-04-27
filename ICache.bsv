@@ -34,6 +34,7 @@ typedef enum {
     WaitFillResp
 } Mshr deriving (Bits, Eq, FShow);
 
+(* synthesize *)
 module mkICache(ICache);
   BRAM_Configure cfg = defaultValue();
   
@@ -41,10 +42,9 @@ module mkICache(ICache);
   Vector#(128, Reg#(CacheTag)) tags <- replicateM(mkReg('hfff));
   Vector#(128, Reg#(Bit#(1))) dirty <- replicateM(mkReg(0));
 
-  Ehr#(2, Maybe#(CacheReq)) currentRequest <- mkEhr(Invalid);
-  FIFO#(CacheBlockOffset) offsetQueue <- mkFIFO;
+  Ehr#(3, Maybe#(CacheReq)) currentRequest <- mkEhr(Invalid);
 
-  Reg#(Mshr) state <- mkReg(Ready);
+  Ehr#(2, Mshr) state <- mkEhr(Ready);
 
   FIFO#(Word) toProcQueue <- mkBypassFIFO;
   FIFO#(MainMemReq) toMemQueue <- mkBypassFIFO;
@@ -54,20 +54,20 @@ module mkICache(ICache);
   Reg#(Bool) debug <- mkReg(False);
 
   rule newReq if (
-    state == Ready &&
-    isValid(currentRequest[1]) == True
+    state[1] == Ready &&
+    isValid(currentRequest[2]) == True
     );
 
-    let req = fromMaybe(?, currentRequest[1]);
+    let req = fromMaybe(?, currentRequest[2]);
     let address = getAddressFields(req.addr);
 
-    if (debug && req.byte_en == 0) $display("read %x\n", req.addr);
-    if (debug && req.byte_en != 0) $display("write %x, %x\n", req.addr, req.data);
+    if (debug && req.byte_en == 0) $display("read %x", req.addr);
+    if (debug && req.byte_en != 0) $display("write %x, %x", req.addr, req.data);
 
     if (req.byte_en == 0) begin // load
 
         if (tags[address.index] == address.tag) begin // load hit
-          if (debug) $display("%x req load hit", req.addr);
+          if (debug) $display("%x req load hit, %x", req.addr, address.blockOffset);
           // Read Line from BRAM
           let hitreq = BRAMRequest{
             write: False,
@@ -76,17 +76,14 @@ module mkICache(ICache);
             responseOnWrite: False
           };
           cache.portA.request.put(hitreq);
+          state[1] <= Hit; // old
 
-          state <= Hit; // old
-
-        //   offsetQueue.enq(address.blockOffset); // new
-        //   currentRequest[1] <= tagged Invalid; // new
           
         end else begin // load miss
           if (debug) $display("%x req load miss", req.addr);
 
           if (dirty[address.index] == 1) begin
-            state <= Writeback;
+            state[1] <= Writeback;
             let dirtyLine = BRAMRequest{
               write: False,
               address: address.index,
@@ -94,7 +91,7 @@ module mkICache(ICache);
               responseOnWrite: False
             };
             cache.portA.request.put(dirtyLine);
-          end else state <= SendFillReq;
+          end else state[1] <= SendFillReq;
         end
 
     end else begin // Store
@@ -103,25 +100,22 @@ module mkICache(ICache);
     end
   endrule
 
-//   rule getHit if (state == Ready); // new
-  rule getHit if (state == Hit); // old
-    if (debug) $display("load hit");
+  rule getHit if (state[0] == Hit); // old
     CacheLine lineResp <- cache.portA.response.get();
 
-    let req = fromMaybe(?, currentRequest[1]); // old
+    let req = fromMaybe(?, currentRequest[0]); // old
     let offset = getAddressFields(req.addr).blockOffset; // old
 
-    // let offset = offsetQueue.first(); // new
-    // offsetQueue.deq(); // new
+    if (debug) $display("load hit %x", lineResp[offset]);
 
     toProcQueue.enq(lineResp[offset]);
 
-    currentRequest[1] <= tagged Invalid; // old
-    state <= Ready; // old
+    currentRequest[0] <= tagged Invalid; // old
+    state[0] <= Ready; // old
   endrule
 
-  rule writeback if (state == Writeback);
-    let req = fromMaybe(?, currentRequest[1]);
+  rule writeback if (state[0] == Writeback);
+    let req = fromMaybe(?, currentRequest[0]);
     let address = getAddressFields(req.addr);
 
     if (debug) $display("%x start miss", req.addr);
@@ -136,11 +130,11 @@ module mkICache(ICache);
       data: lineResp
     });
 
-    state <= SendFillReq;
+    state[0] <= SendFillReq;
   endrule
 
-  rule sendingFillReq if (state == SendFillReq);
-    let req = fromMaybe(?, currentRequest[1]);
+  rule sendingFillReq if (state[0] == SendFillReq);
+    let req = fromMaybe(?, currentRequest[0]);
     let address = getAddressFields(req.addr);
     if (debug) $display("%x send fill", req.addr);
 
@@ -152,11 +146,11 @@ module mkICache(ICache);
       data: ?
     });
     
-    state <= WaitFillResp;
+    state[0] <= WaitFillResp;
   endrule
 
-  rule waitingFillResp if (state == WaitFillResp && isValid(memResp));
-    let req = fromMaybe(?, currentRequest[1]);
+  rule waitingFillResp if (state[0] == WaitFillResp && isValid(memResp));
+    let req = fromMaybe(?, currentRequest[0]);
     let address = getAddressFields(req.addr);
 
     if (debug) $display("%x wait fill", req.addr);
@@ -182,15 +176,15 @@ module mkICache(ICache);
     end
 
     memResp <= tagged Invalid;
-    state <= Ready;
-    currentRequest[1] <= tagged Invalid;
+    state[0] <= Ready;
+    currentRequest[0] <= tagged Invalid;
   endrule
 
   method Action putFromProc(CacheReq e) if (
-    state == Ready && 
-    isValid(currentRequest[0]) == False
+    state[1] == Ready && 
+    isValid(currentRequest[1]) == False
     );
-    currentRequest[0] <= tagged Valid e;
+    currentRequest[1] <= tagged Valid e;
   endmethod
 
   method ActionValue#(Word) getToProc();
