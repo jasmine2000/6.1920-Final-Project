@@ -7,6 +7,7 @@ typedef Bit#(19) CacheTag;
 typedef Bit#(32) WordAddr;
 
 typedef Bit#(32) Word;
+typedef struct { Word i1; Maybe#(Word) i2; } ICacheResp deriving (Eq, FShow, Bits);
 
 typedef Vector#(16, Word) CacheLine;
 

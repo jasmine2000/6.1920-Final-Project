@@ -11,7 +11,7 @@ import MemTypes::*;
 
 interface RVIfc;
     method ActionValue#(CacheReq) getIReq();
-    method Action getIResp(Word a);
+    method Action getIResp(ICacheResp a);
     method ActionValue#(CacheReq) getDReq();
     method Action getDResp(Word a);
     method ActionValue#(CacheReq) getMMIOReq();
@@ -57,7 +57,7 @@ typedef struct {
 module mkpipelined(RVIfc);
     // Interface with memory and devices
     FIFO#(CacheReq) toImem <- mkBypassFIFO;
-    FIFO#(Word) fromImem <- mkBypassFIFO;
+    FIFO#(ICacheResp) fromImem <- mkBypassFIFO;
     FIFO#(CacheReq) toDmem <- mkBypassFIFO;
     FIFO#(Word) fromDmem <- mkBypassFIFO;
     FIFO#(CacheReq) toMMIO <- mkBypassFIFO;
@@ -136,7 +136,7 @@ module mkpipelined(RVIfc);
         let from_fetch = f2dQueues[f2d_deq].first();
 
         let resp = fromImem.first();
-        let instr = resp;
+        let instr = resp.i1;
         let decodedInst = decodeInst(instr);
 
         decodeKonata(lfh, from_fetch.k_id);
@@ -366,7 +366,7 @@ module mkpipelined(RVIfc);
 		toImem.deq();
 		return toImem.first();
     endmethod
-    method Action getIResp(Word a);
+    method Action getIResp(ICacheResp a);
     	fromImem.enq(a);
     endmethod
     method ActionValue#(CacheReq) getDReq();

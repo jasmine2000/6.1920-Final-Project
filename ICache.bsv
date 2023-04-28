@@ -21,7 +21,7 @@ endfunction
 
 interface ICache;
     method Action putFromProc(CacheReq e);
-    method ActionValue#(Word) getToProc();
+    method ActionValue#(ICacheResp) getToProc();
     method ActionValue#(MainMemReq) getToMem();
     method Action putFromMem(CacheLine e);
 endinterface
@@ -46,7 +46,7 @@ module mkICache(ICache);
 
   Ehr#(2, Mshr) state <- mkEhr(Ready);
 
-  FIFO#(Word) toProcQueue <- mkBypassFIFO;
+  FIFO#(ICacheResp) toProcQueue <- mkBypassFIFO;
   FIFO#(MainMemReq) toMemQueue <- mkBypassFIFO;
 
   Reg#(Maybe#(CacheLine)) memResp <- mkReg(Invalid);
@@ -108,7 +108,10 @@ module mkICache(ICache);
 
     if (debug) $display("load hit %x", lineResp[offset]);
 
-    toProcQueue.enq(lineResp[offset]);
+    let resp = ICacheResp {i1: lineResp[offset], i2: tagged Invalid};
+    if (offset < 15) resp.i2 = tagged Valid lineResp[offset + 1];
+
+    toProcQueue.enq(resp);
 
     currentRequest[0] <= tagged Invalid; // old
     state[0] <= Ready; // old
@@ -153,17 +156,22 @@ module mkICache(ICache);
     let req = fromMaybe(?, currentRequest[0]);
     let address = getAddressFields(req.addr);
 
+
     if (debug) $display("%x wait fill", req.addr);
 
-    CacheLine resp = fromMaybe(?, memResp);
+    CacheLine lineResp = fromMaybe(?, memResp);
 
     if (req.byte_en == 0) begin // Read
-      toProcQueue.enq(resp[address.blockOffset]);
+      let offset = address.blockOffset;
+      let resp = ICacheResp {i1: lineResp[offset], i2: tagged Invalid};
+      if (offset < 15) resp.i2 = tagged Valid lineResp[offset + 1];
+      
+      toProcQueue.enq(resp);
       
       let newLine = BRAMRequest{
         write: True,
         address: address.index,
-        datain: resp,
+        datain: lineResp,
         responseOnWrite: False
       };
       cache.portA.request.put(newLine);
@@ -187,7 +195,7 @@ module mkICache(ICache);
     currentRequest[1] <= tagged Valid e;
   endmethod
 
-  method ActionValue#(Word) getToProc();
+  method ActionValue#(ICacheResp) getToProc();
     let ret = toProcQueue.first();
     toProcQueue.deq();
     if (debug) $display("%x get to proc", ret);

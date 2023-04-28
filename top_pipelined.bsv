@@ -61,7 +61,7 @@ module mktop_pipelined(Empty);
     endrule
 
     rule responseICacheToProc;
-        Word req <- cacheInstruction.getToProc();
+        let req <- cacheInstruction.getToProc();
         if (debug) $display("Get IResp from Cache ", fshow(req));
         rv_core.getIResp(req);
     endrule
