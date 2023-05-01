@@ -6,7 +6,7 @@ import Vector::*;
 import KonataHelper::*;
 import Printf::*;
 import Ehr::*;
-
+import Supfifo::*;
 import MemTypes::*;
 
 interface RVIfc;
@@ -66,9 +66,14 @@ module mkpipelined(RVIfc);
     Ehr#(2, Bit#(32)) pc <- mkEhr(0);
     Vector#(32, Reg#(Bit#(32))) rf <- replicateM(mkReg(0));
 
-    Vector#(2, FIFO#(F2D)) f2dQueues <- replicateM(mkFIFO);
-    Reg#(Bit#(1)) f2d_enq <- mkReg(0);
-    Reg#(Bit#(1)) f2d_deq <- mkReg(0);
+
+    SupFifo#(F2D) f2dQueue <- mkSupFifo;
+    Reg#(Maybe#(Word)) next_ins <- mkReg(Invalid);
+
+    //Vector#(2, FIFO#(F2D)) f2dQueues <- replicateM(mkFIFO);
+    
+    //Reg#(Bit#(1)) f2d_enq <- mkReg(0);
+    //Reg#(Bit#(1)) f2d_deq <- mkReg(0);
 
     Vector#(2, FIFO#(D2E)) d2eQueues <- replicateM(mkFIFO);
     Reg#(Bit#(1)) d2e_enq <- mkReg(0);
@@ -107,12 +112,12 @@ module mkpipelined(RVIfc);
     rule fetch if (!starting);
         Bit#(32) pc_fetched = pc[1];
         Bit#(32) next_pc_predicted = pc_fetched + 4;
-        pc[1] <= next_pc_predicted;
+        
         if(debug) $display("Fetch %x", pc_fetched);
         // You should put the pc that you fetch in pc_fetched
         // Below is the code to support Konata's visualization
-		let iid <- fetch1Konata(lfh, fresh_id, 0);
-        labelKonataLeft(lfh, iid, $format("PC %x ",pc_fetched));
+		
+
         // TODO implement fetch
         
         let req = CacheReq {
@@ -122,59 +127,108 @@ module mkpipelined(RVIfc);
         };
         toImem.enq(req);
 
-        f2dQueues[f2d_enq].enq(F2D { 
+        KonataId iid = ?;
+        if (pc_fetched[5:2] < 15) // Not end of line
+        begin
+            iid <- nfetchKonata(lfh, fresh_id, 0,2);
+            let iid2 = iid + 1;
+            labelKonataLeft(lfh, iid, $format("PC %x ",pc_fetched));
+            labelKonataLeft(lfh, iid2, $format("PC %x ",next_pc_predicted));
+
+            f2dQueue.enq2(F2D { 
+                pc: next_pc_predicted,
+                ppc: next_pc_predicted + 4,
+                epoch: epoch[1],
+                k_id: iid2
+            });
+            pc[1] <= next_pc_predicted + 4;
+        end 
+        else 
+        begin 
+            iid <- fetch1Konata(lfh, fresh_id, 0);
+            labelKonataLeft(lfh, iid, $format("PC %x ",pc_fetched));
+
+            pc[1] <= next_pc_predicted;
+        end
+
+        f2dQueue.enq1(F2D { 
             pc: pc_fetched,
             ppc: next_pc_predicted,
             epoch: epoch[1],
             k_id: iid
         });
-        f2d_enq <= f2d_enq + 1;
 
     endrule
 
+
     rule decode if (!starting);
-        let from_fetch = f2dQueues[f2d_deq].first();
-
         let resp = fromImem.first();
-        let instr = resp.i1;
-        let decodedInst = decodeInst(instr);
+        Bool double_decode = isValid(resp.i2);
+        let from_fetch1 = f2dQueue.first1();
+        //let from_fetch2 = f2dQueue.first2();
 
-        decodeKonata(lfh, from_fetch.k_id);
-        labelKonataLeft(lfh,from_fetch.k_id, $format("decoded %x ", instr));
+        Word instr1 = ?;
+        if (isValid(next_ins)) begin
+            instr1 = fromMaybe(?, next_ins);
+        end else begin
+            instr1 = resp.i1;
+        end
+      
 
-        if (debug) $display("[Decode] ", fshow(decodedInst));
+        //let instr1 = resp.i1;
+        //let instr2 = fromMaybe(?, resp.i2);
+        
+        let decodedInst1 = decodeInst(instr1);
+        //let decodedInst2 = decodeInst(instr2);
 
-        let fields = getInstFields(instr);
-        let rs1_idx = fields.rs1;
-        let rs2_idx = fields.rs2;
-        let rd_idx = fields.rd;
+        decodeKonata(lfh, from_fetch1.k_id);
+        labelKonataLeft(lfh,from_fetch1.k_id, $format("decoded %x ", instr1));
+        
 
-        if (scoreboard[rs1_idx][0] == 0 && 
-            scoreboard[rs2_idx][0] == 0) begin // no data hazard
+        if (debug) $display("[Decode] ", fshow(decodedInst1));
+
+        let fields1 = getInstFields(instr1);
+        let rs1_idx1 = fields1.rs1;
+        let rs2_idx1 = fields1.rs2;
+        let rd_idx1 = fields1.rd;
+
+        // let fields2 = getInstFields(instr2);
+        // let rs1_idx2 = fields2.rs1;
+        // let rs2_idx2 = fields2.rs2;
+        // let rd_idx2 = fields2.rd;
+
+        if (scoreboard[rs1_idx1][0] == 0 && 
+            scoreboard[rs2_idx1][0] == 0) begin // no data hazard
             
-            f2dQueues[f2d_deq].deq();
-            f2d_deq <= f2d_deq + 1;
+            f2dQueue.deq1();
+            
+            if (isValid(next_ins)) begin
+                next_ins <= tagged Invalid;
+            end else begin
+                fromImem.deq();
+                next_ins <= resp.i2;
+            end
 
-            fromImem.deq();
+            
 
-            let rs1 = (rs1_idx ==0 ? 0 : rf[rs1_idx]);
-            let rs2 = (rs2_idx == 0 ? 0 : rf[rs2_idx]);
+            let rs1_1 = (rs1_idx1 ==0 ? 0 : rf[rs1_idx1]);
+            let rs2_1 = (rs2_idx1 == 0 ? 0 : rf[rs2_idx1]);
 
             d2eQueues[d2e_enq].enq(D2E {
-                dinst: decodedInst,
-                pc: from_fetch.pc,
-                ppc: from_fetch.ppc,
-                epoch: from_fetch.epoch,
-                rv1: rs1,
-                rv2: rs2,
-                k_id: from_fetch.k_id
+                dinst: decodedInst1,
+                pc: from_fetch1.pc,
+                ppc: from_fetch1.ppc,
+                epoch: from_fetch1.epoch,
+                rv1: rs1_1,
+                rv2: rs2_1,
+                k_id: from_fetch1.k_id
             });
             d2e_enq <= d2e_enq + 1;
 
-            if (decodedInst.valid_rd) begin
-                if (rd_idx != 0) begin 
-                    scoreboard[rd_idx][0] <= scoreboard[rd_idx][0] + 1;
-                    if(debug) $display("Stalling %x", rd_idx);
+            if (decodedInst1.valid_rd) begin
+                if (rd_idx1 != 0) begin 
+                    scoreboard[rd_idx1][0] <= scoreboard[rd_idx1][0] + 1;
+                    if(debug) $display("Stalling %x", rd_idx1);
                 end
             end
         end

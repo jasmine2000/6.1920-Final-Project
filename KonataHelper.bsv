@@ -39,6 +39,7 @@ function ActionValue#(KonataId) nfetchKonata(File f, Reg#(KonataId) konataCtr,Th
     actionvalue
         konataCtr <= konataCtr + fromInteger(k);
         for (Integer j = 0; j < k; j = j + 1) begin 
+            $fdisplay(f,"I\t%d\t%d\t%d",konataCtr + fromInteger(j),konataCtr + fromInteger(j),tid);
             $fdisplay(f,"S\t%d\t%d\t%s",konataCtr + fromInteger(j),0,"F");
         end
         return konataCtr;
