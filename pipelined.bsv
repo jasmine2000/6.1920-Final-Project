@@ -57,7 +57,7 @@ typedef struct {
 module mkpipelined(RVIfc);
     // Interface with memory and devices
     FIFO#(CacheReq) toImem <- mkBypassFIFO;
-    FIFO#(ICacheResp) fromImem <- mkBypassFIFO;
+    SupFifo#(Word) fromImem <- mkBypassSupFifo;
     FIFO#(CacheReq) toDmem <- mkBypassFIFO;
     FIFO#(Word) fromDmem <- mkBypassFIFO;
     FIFO#(CacheReq) toMMIO <- mkBypassFIFO;
@@ -66,22 +66,9 @@ module mkpipelined(RVIfc);
     Ehr#(2, Bit#(32)) pc <- mkEhr(0);
     Vector#(32, Reg#(Bit#(32))) rf <- replicateM(mkReg(0));
 
-
     SupFifo#(F2D) f2dQueue <- mkSupFifo;
-    Reg#(Maybe#(Word)) next_ins <- mkReg(Invalid);
-
-    //Vector#(2, FIFO#(F2D)) f2dQueues <- replicateM(mkFIFO);
-    
-    //Reg#(Bit#(1)) f2d_enq <- mkReg(0);
-    //Reg#(Bit#(1)) f2d_deq <- mkReg(0);
-
-    Vector#(2, FIFO#(D2E)) d2eQueues <- replicateM(mkFIFO);
-    Reg#(Bit#(1)) d2e_enq <- mkReg(0);
-    Reg#(Bit#(1)) d2e_deq <- mkReg(0);
-
-    Vector#(2, FIFO#(E2W)) e2wQueues <- replicateM(mkFIFO);
-    Reg#(Bit#(1)) e2w_enq <- mkReg(0);
-    Reg#(Bit#(1)) e2w_deq <- mkReg(0);
+    SupFifo#(D2E) d2eQueue <- mkSupFifo;
+    SupFifo#(E2W) e2wQueue <- mkSupFifo;
 
     Ehr#(2, Bit#(1)) epoch <- mkEhr(1'b0);
     Vector#(32, Ehr#(2, Bit#(2))) scoreboard <- replicateM(mkEhr(0));
@@ -95,7 +82,7 @@ module mkpipelined(RVIfc);
 	Reg#(KonataId) commit_id <- mkReg(0);
 
 	FIFO#(KonataId) retired <- mkFIFO;
-	FIFO#(KonataId) squashed <- mkFIFO;
+	SupFifo#(KonataId) squashed <- mkSupFifo;
     
     Reg#(Bool) starting <- mkReg(True);
 
@@ -162,24 +149,10 @@ module mkpipelined(RVIfc);
 
 
     rule decode if (!starting);
-        let resp = fromImem.first();
-        Bool double_decode = isValid(resp.i2);
         let from_fetch1 = f2dQueue.first1();
-        //let from_fetch2 = f2dQueue.first2();
-
-        Word instr1 = ?;
-        if (isValid(next_ins)) begin
-            instr1 = fromMaybe(?, next_ins);
-        end else begin
-            instr1 = resp.i1;
-        end
-      
-
-        //let instr1 = resp.i1;
-        //let instr2 = fromMaybe(?, resp.i2);
+        let instr1 = fromImem.first1();
         
         let decodedInst1 = decodeInst(instr1);
-        //let decodedInst2 = decodeInst(instr2);
 
         decodeKonata(lfh, from_fetch1.k_id);
         labelKonataLeft(lfh,from_fetch1.k_id, $format("decoded %x ", instr1));
@@ -192,29 +165,16 @@ module mkpipelined(RVIfc);
         let rs2_idx1 = fields1.rs2;
         let rd_idx1 = fields1.rd;
 
-        // let fields2 = getInstFields(instr2);
-        // let rs1_idx2 = fields2.rs1;
-        // let rs2_idx2 = fields2.rs2;
-        // let rd_idx2 = fields2.rd;
-
         if (scoreboard[rs1_idx1][0] == 0 && 
             scoreboard[rs2_idx1][0] == 0) begin // no data hazard
             
             f2dQueue.deq1();
-            
-            if (isValid(next_ins)) begin
-                next_ins <= tagged Invalid;
-            end else begin
-                fromImem.deq();
-                next_ins <= resp.i2;
-            end
-
-            
+            fromImem.deq1();
 
             let rs1_1 = (rs1_idx1 ==0 ? 0 : rf[rs1_idx1]);
             let rs2_1 = (rs2_idx1 == 0 ? 0 : rf[rs2_idx1]);
 
-            d2eQueues[d2e_enq].enq(D2E {
+            d2eQueue.enq1(D2E {
                 dinst: decodedInst1,
                 pc: from_fetch1.pc,
                 ppc: from_fetch1.ppc,
@@ -223,7 +183,6 @@ module mkpipelined(RVIfc);
                 rv2: rs2_1,
                 k_id: from_fetch1.k_id
             });
-            d2e_enq <= d2e_enq + 1;
 
             if (decodedInst1.valid_rd) begin
                 if (rd_idx1 != 0) begin 
@@ -231,24 +190,78 @@ module mkpipelined(RVIfc);
                     if(debug) $display("Stalling %x", rd_idx1);
                 end
             end
+
+            // let from_fetch2 = f2dQueue.first2();
+            // let instr2 = fromImem.first2();
+            // let decodedInst2 = decodeInst(instr2);
+
+            // decodeKonata(lfh, from_fetch2.k_id);
+            // labelKonataLeft(lfh,from_fetch2.k_id, $format("decoded %x ", instr2));
+
+            // if (debug) $display("[Decode] ", fshow(decodedInst2));
+
+            // let fields2 = getInstFields(instr2);
+            // let rs1_idx2 = fields2.rs1;
+            // let rs2_idx2 = fields2.rs2;
+            // let rd_idx2 = fields2.rd;
+
+            // if (rs1_idx2 != rd_idx1 && // RAW HAZARD
+            //     rs2_idx2 != rd_idx1 && // RAW HAZARD
+            //     rd_idx2 != rd_idx1 && // WAW HAZARD
+            //     scoreboard[rs1_idx2][0] == 0 && 
+            //     scoreboard[rs2_idx2][0] == 0) begin // no data hazard
+                
+            //     f2dQueue.deq2();
+            //     fromImem.deq2();
+
+            //     let rs1_2 = (rs1_idx2 ==0 ? 0 : rf[rs1_idx2]);
+            //     let rs2_2 = (rs2_idx2 == 0 ? 0 : rf[rs2_idx2]);
+
+            //     d2eQueue.enq2(D2E {
+            //         dinst: decodedInst2,
+            //         pc: from_fetch2.pc,
+            //         ppc: from_fetch2.ppc,
+            //         epoch: from_fetch2.epoch,
+            //         rv1: rs1_2,
+            //         rv2: rs2_2,
+            //         k_id: from_fetch2.k_id
+            //     });
+
+            //     if (decodedInst2.valid_rd) begin
+            //         if (rd_idx2 != 0) begin 
+            //             scoreboard[rd_idx2][0] <= scoreboard[rd_idx2][0] + 1;
+            //             if(debug) $display("Stalling %x", rd_idx2);
+            //         end
+            //     end
+            // end
         end
     endrule
 
     rule execute if (!starting);
-        let from_decode = d2eQueues[d2e_deq].first();
-        d2eQueues[d2e_deq].deq();
-        d2e_deq <= d2e_deq + 1;
-        
+        let from_decode = d2eQueue.first1();
         let current_id = from_decode.k_id;
-   	    executeKonata(lfh, current_id);
-        labelKonataLeft(lfh,current_id, $format("executing "));
+
+        d2eQueue.deq1();
 
         let dInst = from_decode.dinst;
-        if (debug) $display("[Execute] ", fshow(dInst));
-
         let fields = getInstFields(dInst.inst);
 
-        if (from_decode.epoch == epoch[0]) begin
+        let temp_epoch = epoch[0];
+
+        executeKonata(lfh, current_id);
+        labelKonataLeft(lfh,current_id, $format("executing "));
+        if (debug) $display("[Execute] ", fshow(dInst));
+
+
+        // let from_decode2 = d2eQueue.first2();
+        // let current_id2 = from_decode2.k_id;
+        // let dInst2 = from_decode.dinst;
+
+        // executeKonata(lfh, current_id2);
+        // labelKonataLeft(lfh,current_id2, $format("executing "));
+        // if (debug) $display("[Execute] ", fshow(dInst2));
+
+        if (from_decode.epoch == temp_epoch) begin
             let rv1 = from_decode.rv1;
             let rv2 = from_decode.rv2;
             let pc1 = from_decode.pc;
@@ -297,7 +310,7 @@ module mkpipelined(RVIfc);
             let controlResult = execControl32(dInst.inst, rv1, rv2, imm, pc1);
             let nextPc = controlResult.nextPC;
             if (nextPc != from_decode.ppc) begin
-                epoch[0] <= epoch[0] + 1;
+                temp_epoch = temp_epoch + 1;
                 pc[0] <= nextPc;
                 labelKonataLeft(lfh,current_id, $format("new pc %x ", nextPc));
             end
@@ -305,46 +318,94 @@ module mkpipelined(RVIfc);
             labelKonataLeft(lfh,current_id, $format("ALU output: %x " , data));
 
             let mem_business = MemBusiness { isUnsigned : unpack(isUnsigned), size : size, offset : offset, mmio: mmio};
-            e2wQueues[e2w_enq].enq(E2W { 
+            e2wQueue.enq1(E2W { 
                 mem_business: mem_business,
                 data: data,
                 dinst: dInst,
                 k_id: from_decode.k_id,
                 valid: True
             });
-            e2w_enq <= e2w_enq + 1;
+
+            // // try execute second instruction if epoch hasn't changed
+            // if (epoch[0] == temp_epoch) begin 
+            //     if (!isMemoryInst(dInst2) && !isControlInst(dInst2)) begin
+            //         d2eQueue.deq2();
+
+            //         let fields2 = getInstFields(dInst2.inst);
+
+            //         let rv1_2 = from_decode2.rv1;
+            //         let rv2_2 = from_decode2.rv2;
+            //         let pc1_2 = from_decode2.pc;
+
+            //         let imm2 = getImmediate(dInst2);
+            //         Bool mmio2 = False;
+            //         let data2 = execALU32(dInst2.inst, rv1_2, rv2_2, imm2, pc1_2);
+            //         let isUnsigned2 = 0;
+            //         let funct32 = fields.funct3;
+            //         let size2 = funct32[1:0];
+            //         let addr2 = rv1_2 + imm2;
+            //         Bit#(2) offset2 = addr2[1:0];
+
+            //         labelKonataLeft(lfh,current_id2, $format(" Standard instr "));
+            //         let controlResult2 = execControl32(dInst2.inst, rv1_2, rv2_2, imm2, pc1_2);
+            //         let nextPc2 = controlResult2.nextPC;
+            //         if (nextPc2 != from_decode2.ppc) begin
+            //             temp_epoch = temp_epoch + 1;
+            //             pc[0] <= nextPc;
+            //             labelKonataLeft(lfh,current_id2, $format("new pc %x ", nextPc2));
+            //         end
+
+            //         labelKonataLeft(lfh,current_id2, $format("ALU output: %x " , data2));
+
+            //         let mem_business2 = MemBusiness { isUnsigned : unpack(isUnsigned2), size : size2, offset : offset2, mmio: mmio2};
+            //         e2wQueue.enq2(E2W { 
+            //             mem_business: mem_business2,
+            //             data: data2,
+            //             dinst: dInst2,
+            //             k_id: from_decode2.k_id,
+            //             valid: True
+            //         });
+            //     end
+            // end else begin
+            //     e2wQueue.enq2(E2W { 
+            //         dinst: dInst2,
+            //         k_id: from_decode2.k_id,
+            //         valid: False,
+            //         data: ?,
+            //         mem_business: ?
+            //     });
+            //     squashed.enq1(current_id2);
+            // end
+
+            epoch[0] <= temp_epoch;
 
         end else begin
-            e2wQueues[e2w_enq].enq(E2W { 
+            e2wQueue.enq1(E2W { 
                 dinst: dInst,
                 k_id: from_decode.k_id,
                 valid: False,
                 data: ?,
                 mem_business: ?
             });
-            e2w_enq <= e2w_enq + 1;
-            squashed.enq(current_id);
+            squashed.enq1(current_id);
+
+            // if (from_decode2.epoch != temp_epoch) begin
+            //     e2wQueue.enq2(E2W { 
+            //         dinst: dInst2,
+            //         k_id: from_decode2.k_id,
+            //         valid: False,
+            //         data: ?,
+            //         mem_business: ?
+            //     });
+            //     squashed.enq2(current_id2);
+            // end
         end
-
-        // Similarly, to register an execute event for an instruction:
-    	//	executeKonata(lfh, k_id);
-    	// where k_id is the unique konata identifier that has been passed around that came from the fetch stage
-
-
-    	// Execute is also the place where we advise you to kill mispredicted instructions
-    	// (instead of Decode + Execute like in the class)
-    	// When you kill (or squash) an instruction, you should register an event for Konata:
-    	
-        // squashed.enq(current_inst.k_id);
-
-        // This will allow Konata to display those instructions in grey
     endrule
 
     rule writeback if (!starting);
         // TODO
-        let from_execute = e2wQueues[e2w_deq].first();
-        e2wQueues[e2w_deq].deq();
-        e2w_deq <= e2w_deq + 1;
+        let from_execute = e2wQueue.first1();
+        e2wQueue.deq1();
 
         let current_id = from_execute.k_id;
    	    writebackKonata(lfh, current_id);
@@ -392,13 +453,62 @@ module mkpipelined(RVIfc);
             end
 		end
 
-        // Similarly, to register an execute event for an instruction:
-	   	//	writebackKonata(lfh,k_id);
+        // let from_execute2 = e2wQueue.first2();
 
+        // let current_id2 = from_execute2.k_id;
+   	    // writebackKonata(lfh, current_id2);
+        // labelKonataLeft(lfh,current_id2, $format("writeback "));
 
-	   	// In writeback is also the moment where an instruction retires (there are no more stages)
-	   	// Konata requires us to register the event as well using the following: 
-		// retired.enq(k_id);
+        // let dInst2 = from_execute2.dinst;
+        // let data2 = from_execute2.data;
+        // let fields2 = getInstFields(dInst2.inst);
+        // let mem_business2 = from_execute2.mem_business;
+
+        // if (!isMemoryInst(dInst1) || 
+        //     !isMemoryInst(dInst2) || 
+        //     mem_business2.mmio != mem_business2.mmio ||
+        //     dInst2.inst[5] != dInst2.inst[5])
+        // begin
+        //     queue_incr = queue_incr + 1;
+        //     e2wQueue.deq2();
+
+        //     if (from_execute2.valid == True) begin
+        //         retired.enq(current_id2);
+        //         if (isMemoryInst(dInst2)) begin // (* // write_val *)
+        //             let resp = ?;
+        //             if (mem_business2.mmio) begin 
+        //                 resp = fromMMIO.first();
+        //                 fromMMIO.deq();
+        //             end else if (dInst2.inst[5] == 0) begin 
+        //                 resp = fromDmem.first();
+        //                 fromDmem.deq();
+        //             end
+        //             let mem_data = resp;
+        //             mem_data = mem_data >> {mem_business2.offset ,3'b0};
+        //             case ({pack(mem_business2.isUnsigned), mem_business2.size}) matches
+        //             3'b000 : data2 = signExtend(mem_data[7:0]);
+        //             3'b001 : data2 = signExtend(mem_data[15:0]);
+        //             3'b100 : data2 = zeroExtend(mem_data[7:0]);
+        //             3'b101 : data2 = zeroExtend(mem_data[15:0]);
+        //             3'b010 : data2 = mem_data;
+        //             endcase
+        //         end
+        //         if(debug) $display("[Writeback]", fshow(dInst2));
+        //         if (!dInst2.legal) begin
+        //             if (debug) $display("[Writeback] Illegal Inst, Drop and fault: ", fshow(dInst2));
+        //             // pc <= 0;	// Fault
+        //         end
+        //     end
+
+        //     if (dInst2.valid_rd) begin
+        //         let rd_idx2 = fields2.rd;
+        //         if (rd_idx2 != 0) begin 
+        //             if (from_execute2.valid == True) rf[rd_idx2][1] <= data2;
+        //             scoreboard[rd_idx2][1] <= scoreboard[rd_idx2][1] - 1;
+        //             if(debug) $display("Unstalled %x", rd_idx2);
+        //         end
+        //     end
+        // end
 	endrule
 		
 
@@ -411,8 +521,8 @@ module mkpipelined(RVIfc);
 	endrule
 		
 	rule administrative_konata_flush;
-		    squashed.deq();
-		    let f = squashed.first();
+		    squashed.deq1();
+		    let f = squashed.first1();
 		    squashKonata(lfh, f);
 	endrule
 		
@@ -421,7 +531,8 @@ module mkpipelined(RVIfc);
 		return toImem.first();
     endmethod
     method Action getIResp(ICacheResp a);
-    	fromImem.enq(a);
+    	fromImem.enq1(a.i1);
+        if (isValid(a.i2)) fromImem.enq2(fromMaybe(?, a.i2));
     endmethod
     method ActionValue#(CacheReq) getDReq();
 		toDmem.deq();
