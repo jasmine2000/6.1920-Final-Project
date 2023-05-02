@@ -13,8 +13,8 @@ typedef struct {
 
 function Address getAddressFields(WordAddr address);
     return Address {
-        tag: address[31:13],
-        index: address[12:6],
+        tag: address[31:10],
+        index: address[9:6],
         blockOffset: address[5:2]
     };
 endfunction
@@ -250,7 +250,17 @@ module mkCache(Cache);
     end else begin
       if (debug) $display("old line: %x", resp);
       
-      resp[address.blockOffset] = req.data;
+      Bit#(32) mask = ?;
+      for (Integer i = 0; i < 4; i = i + 1)
+      begin
+        for (Integer j = 0; j < 8; j = j + 1)
+        begin
+          mask[8*i + j] = req.byte_en[i];
+        end
+      end
+
+      resp[address.blockOffset] = (resp[address.blockOffset] & (~mask) ) | (req.data & mask);
+
       if (debug) $display("new line: %x", resp);
 
       let newLine = BRAMRequest{
@@ -352,7 +362,7 @@ module mkCache(Cache);
     return req;
   endmethod
 
-  method Action putFromMem(CacheLine e);
+  method Action putFromMem(CacheLine e) if (isValid(memResp) == False);
     memResp <= tagged Valid e;
     if (debug) $display("%x returned from mem", e);
   endmethod

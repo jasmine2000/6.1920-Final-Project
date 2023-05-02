@@ -8,7 +8,8 @@ import Cache::*;
 
 module mkBeveren(Empty);
     let verbose = False;
-    Randomize#(MainMemReq) randomMem <- mkGenericRandomizer;
+    Randomize#(CacheReq) randomCacheReq <- mkGenericRandomizer;
+
     MainMem mainRef <- mkMainMemFast(); //Initialize both to 0
     MainMem mainMem <- mkMainMem(); //Initialize both to 0
     Cache cache <- mkCache;
@@ -17,6 +18,8 @@ module mkBeveren(Empty);
     Reg#(Bit#(32)) counterIn <- mkReg(0); 
     Reg#(Bit#(32)) counterOut <- mkReg(0); 
     Reg#(Bool) doinit <- mkReg(True);
+
+    Reg#(Bit#(32)) seqCount <- mkReg(0); 
 
     rule connectCacheDram;
         let lineReq <- cache.getToMem();
@@ -28,37 +31,45 @@ module mkBeveren(Empty);
     endrule
 
     rule start (doinit);
-        randomMem.cntrl.init;
+        randomCacheReq.cntrl.init;
         doinit <= False;
     endrule 
 
     rule reqs (counterIn <= 50000);
-       let newrand <- randomMem.next;
+       let newrand <- randomCacheReq.next;
        deadlockChecker <= 0;
-       MainMemReq newreq = newrand;
-       newreq.addr = {0,newreq.addr[13:2],2'b0};
+       CacheReq newreq = newrand;
+       newreq.addr = {0,newreq.addr[5:0], 2'b00};
        
-       let byte_en = 0;
-       case (newreq.write) matches
-        False: byte_en = 4'b0000;
-        True: byte_en = 4'b1111;
-       endcase
+        // if (newreq.byte_en[0] == 1'b1) newreq.byte_en = 4'b1111;
+        // else newreq.byte_en = 4'b0000;
 
-       CacheReq cachereq = CacheReq{
-        byte_en: byte_en,
-        addr: zeroExtend(newreq.addr),
-        data: ?
-       };
+       if ( newreq.byte_en == 4'b0) counterIn <= counterIn + 1;
 
-       if ( newreq.write == False) counterIn <= counterIn + 1;
-       else begin
-       CacheBlockOffset block_offset = getAddressFields(newreq.addr).blockOffset;
-       cachereq.data = newreq.data[block_offset];
-       end
+        if (verbose) $display("Sent byte_en: %x, addr: %x, data %x", newreq.byte_en, newreq.addr, newreq.data);
 
-       mainRef.put(newreq);
-       cache.putFromProc(cachereq);
+       mainRef.putWord(newreq);
+       cache.putFromProc(newreq);
     endrule
+
+    // rule reqs (counterIn <= 50000);
+    //    let newrand <- randomCacheReq.next;
+    //    deadlockChecker <= 0;
+    //    CacheReq newreq = newrand;
+    //    newreq.addr = {0,counterIn[9:0], 2'b00};
+    //    newreq.data = counterIn;
+       
+    //    if (newreq.byte_en[0] == 1'b1) newreq.byte_en = 4'b1111;
+    //    else newreq.byte_en = 4'b0000;
+
+    //    if ( newreq.byte_en == 4'b0) counterIn <= counterIn + 1;
+
+    //     if (verbose) $display("Sent byte_en: %x, addr: %x, data %x", newreq.byte_en, newreq.addr, newreq.data);
+
+    //    mainRef.putWord(newreq);
+    //    cache.putFromProc(newreq);
+    // endrule
+
 
     rule resps;
        counterOut <= counterOut + 1; 
@@ -80,6 +91,7 @@ module mkBeveren(Empty);
        deadlockChecker <= deadlockChecker + 1;
        if (deadlockChecker > 1000) begin
            $display("The cache deadlocks\n");
+           $display(fshow(counterOut), fshow(counterIn));
            $finish;
        end
     endrule

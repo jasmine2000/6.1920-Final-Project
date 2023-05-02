@@ -8,13 +8,14 @@ import Cache::*;
 
 interface MainMem;
     method Action put(MainMemReq req);
+    method Action putWord(CacheReq req);
     method ActionValue#(CacheLine) get();
     method ActionValue#(Word) getWord();
 endinterface
 
 module mkMainMemFast(MainMem);
     BRAM_Configure cfg = defaultValue();
-    BRAM1Port#(LineAddr, Bit#(32)) bram <- mkBRAM1Server(cfg);
+    BRAM1PortBE#(WordAddr, Bit#(32), 4) bram <- mkBRAM1ServerBE(cfg);
     DelayLine#(1, Word) dl <- mkDL(); // Delay by 20 cycles
 
     rule deq;
@@ -22,13 +23,12 @@ module mkMainMemFast(MainMem);
         dl.put(r);
     endrule    
 
-    method Action put(MainMemReq req);
-        let offset = getAddressFields(req.addr).blockOffset;
-        bram.portA.request.put(BRAMRequest{
-                    write: req.write,
+    method Action putWord(CacheReq req);
+        bram.portA.request.put(BRAMRequestBE{
+                    writeen: req.byte_en,
                     responseOnWrite: False,
                     address: req.addr,
-                    datain: req.data[offset]});
+                    datain: req.data});
     endmethod
 
     method ActionValue#(Word) getWord();
@@ -48,11 +48,10 @@ module mkMainMem(MainMem);
     endrule
 
     method Action put(MainMemReq req);
-        let address = req.addr;
         bram.portA.request.put(BRAMRequest{
                     write: req.write,
                     responseOnWrite: False,
-                    address: address,
+                    address: truncate(req.addr >> 2),
                     datain: req.data});
     endmethod
 

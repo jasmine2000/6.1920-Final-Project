@@ -6,8 +6,8 @@ import Vector::*;
 import Ehr::*;
 
 typedef struct {
-    CacheTag tag;
-    CacheIndex index;
+    Bit#(19) tag;
+    Bit#(7) index;
     CacheBlockOffset blockOffset;
 } Address deriving (FShow);
 
@@ -37,8 +37,8 @@ typedef enum {
 module mkICache(ICache);
   BRAM_Configure cfg = defaultValue();
   
-  BRAM2Port#(CacheIndex, CacheLine) cache <- mkBRAM2Server(cfg);
-  Vector#(128, Reg#(CacheTag)) tags <- replicateM(mkReg('hfff));
+  BRAM2Port#(Bit#(7), CacheLine) cache <- mkBRAM2Server(cfg);
+  Vector#(128, Reg#(Bit#(19))) tags <- replicateM(mkReg('hfff));
 
   Ehr#(3, Maybe#(CacheReq)) currentRequest <- mkEhr(Invalid);
 
