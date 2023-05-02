@@ -79,7 +79,8 @@ module mkCache(Cache);
       // TODO : FIX SBUFF
       for (Bit#(4) i = 0; (i)<sBuffCnt; i=i+1)
       begin
-          if (req.addr == storeBuff[sBuffDeq + i[2:0]].addr)
+          let idx = sBuffDeq + i[2:0];
+          if (storeBuffValid[idx] == True && req.addr == storeBuff[idx].addr)
           begin
             ret = storeBuff[sBuffDeq + i[2:0]].data;
             found = True;
