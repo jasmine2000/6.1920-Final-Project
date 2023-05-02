@@ -86,8 +86,6 @@ module mkCache(Cache);
           way = i;
         end
       end
-
-
       
       if (hit) begin // load hit
         if (debug) $display("%x req load hit", req.addr);
@@ -165,13 +163,11 @@ module mkCache(Cache);
       cache[currentWay].portA.request.put(newLine);
       dirty[currentWay][address.index] <= 1;
 
-      // if (storeBuffValid[sBuffDeq + 1] == False && isValid(stallRequest)) begin // cleared sbuff
-      //   currentRequest[1] <= stallRequest;
-      //   stallRequest <= tagged Invalid;
-      // end else 
-      currentRequest[1] <= tagged Invalid;
+      if (storeBuffValid[sBuffDeq] == False && isValid(stallRequest)) begin // cleared sbuff
+        currentRequest[1] <= stallRequest;
+        stallRequest <= tagged Invalid;
+      end else currentRequest[1] <= tagged Invalid;
     end
-    // currentRequest[1] <= tagged Invalid;
     state <= Ready;
   endrule
 
@@ -260,11 +256,10 @@ module mkCache(Cache);
 
     memResp <= tagged Invalid;
     state <= Ready;
-    // if (storeBuffValid[sBuffDeq + 1] == False && isValid(stallRequest)) begin // cleared sbuff
-    //   currentRequest[1] <= stallRequest;
-    //   stallRequest <= tagged Invalid;
-    // end else 
-    currentRequest[1] <= tagged Invalid;
+    if (storeBuffValid[sBuffDeq] == False && isValid(stallRequest)) begin // cleared sbuff
+      currentRequest[1] <= stallRequest;
+      stallRequest <= tagged Invalid;
+    end else currentRequest[1] <= tagged Invalid;
   endrule
 
   rule deqStoreBuff if (
@@ -330,7 +325,8 @@ module mkCache(Cache);
   method Action putFromProc(CacheReq e) if (
     state == Ready && 
     storeBuffValid[sBuffEnq] == False &&
-    isValid(currentRequest[0]) == False
+    isValid(currentRequest[0]) == False &&
+    isValid(stallRequest) == False
     );
 
     Bool found = False;
@@ -351,7 +347,7 @@ module mkCache(Cache);
       end
     end
 
-    if (partialWrite == True) 
+    if (partialWrite == True)
       stallRequest <= tagged Valid e;
     else if (found == True) 
       toProcQueue.enq(ret);
