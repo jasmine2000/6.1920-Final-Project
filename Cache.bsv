@@ -4,6 +4,7 @@ import SpecialFIFOs::*;
 import MemTypes::*;
 import Vector::*;
 import Ehr::*;
+import StoreBuffer::*;
 
 typedef struct {
     CacheTag tag;
@@ -44,11 +45,7 @@ module mkCache(Cache);
   Ehr#(2, Maybe#(CacheReq)) currentRequest <- mkEhr(Invalid);
   Reg#(Maybe#(CacheReq)) stallRequest <- mkReg(Invalid);
 
-  Vector#(8, Reg#(CacheReq)) storeBuff <- replicateM(mkReg(?));
-  Vector#(8, Reg#(Bool)) storeBuffValid <- replicateM(mkReg(False));
-  Reg#(Bit#(3)) sBuffEnq <- mkReg(0);
-  Reg#(Bit#(3)) sBuffDeq <- mkReg(0);
-  Reg#(Bit#(4)) sBuffCnt <- mkReg(0);
+  StoreBuffer store_buffer <- mkstorebuffer();
 
   Reg#(Mshr) state <- mkReg(Ready);
 
@@ -62,8 +59,7 @@ module mkCache(Cache);
 
   rule newReq if (
     state == Ready &&
-    isValid(currentRequest[1]) == True && 
-    storeBuffValid[sBuffEnq] == False
+    isValid(currentRequest[1]) == True
     );
 
     let req = fromMaybe(?, currentRequest[1]);
@@ -120,10 +116,7 @@ module mkCache(Cache);
 
     end else begin // Store
       if (debug) $display("%x store", req.addr);
-      storeBuff[sBuffEnq] <= req;
-      storeBuffValid[sBuffEnq] <= True;
-      sBuffEnq <= sBuffEnq + 1;
-      sBuffCnt <= sBuffCnt + 1;
+      store_buffer.enq(req);
       currentRequest[1] <= tagged Invalid;
     end
   endrule
@@ -163,7 +156,7 @@ module mkCache(Cache);
       cache[currentWay].portA.request.put(newLine);
       dirty[currentWay][address.index] <= 1;
 
-      if (storeBuffValid[sBuffDeq] == False && isValid(stallRequest)) begin // cleared sbuff
+      if (store_buffer.isEmpty() && isValid(stallRequest)) begin // cleared sbuff
         currentRequest[1] <= stallRequest;
         stallRequest <= tagged Invalid;
       end else currentRequest[1] <= tagged Invalid;
@@ -256,7 +249,7 @@ module mkCache(Cache);
 
     memResp <= tagged Invalid;
     state <= Ready;
-    if (storeBuffValid[sBuffDeq] == False && isValid(stallRequest)) begin // cleared sbuff
+    if (store_buffer.isEmpty() && isValid(stallRequest)) begin // cleared sbuff
       currentRequest[1] <= stallRequest;
       stallRequest <= tagged Invalid;
     end else currentRequest[1] <= tagged Invalid;
@@ -264,11 +257,10 @@ module mkCache(Cache);
 
   rule deqStoreBuff if (
     state == Ready && 
-    isValid(currentRequest[1]) == False &&
-    storeBuffValid[sBuffDeq] == True
+    isValid(currentRequest[1]) == False
     );
 
-    let req = storeBuff[sBuffDeq];
+    let req <- store_buffer.deq();
     let address = getAddressFields(req.addr);
 
     if (debug) $display("%x store buff", req.addr);
@@ -317,14 +309,11 @@ module mkCache(Cache);
       currentRequest[1] <= tagged Valid req;
     end
 
-    sBuffDeq <= sBuffDeq + 1;
-    storeBuffValid[sBuffDeq] <= False;
-    sBuffCnt <= sBuffCnt - 1;
   endrule
 
   method Action putFromProc(CacheReq e) if (
     state == Ready && 
-    storeBuffValid[sBuffEnq] == False &&
+    store_buffer.isFull() == False &&
     isValid(currentRequest[0]) == False &&
     isValid(stallRequest) == False
     );
@@ -334,18 +323,18 @@ module mkCache(Cache);
     Bool partialWrite = False;
 
     if (e.byte_en == 4'b0) begin
-      for (Bit#(4) i = 0; (i)<sBuffCnt; i=i+1)
-      begin
-          let idx = sBuffDeq + i[2:0];
-          if (storeBuffValid[idx] == True && e.addr == storeBuff[idx].addr)
-          begin
-            if (storeBuff[sBuffDeq + i[2:0]].byte_en == 4'b1111) begin
-              ret = storeBuff[sBuffDeq + i[2:0]].data;
-              found = True;
-            end else partialWrite = True;
-          end
+      let sbufffound = store_buffer.search(e);
+      if (isValid(sbufffound)) begin
+        let sbufffoundreq = fromMaybe(?, sbufffound);
+        if (sbufffoundreq.byte_en == 4'b1111) begin
+          ret = sbufffoundreq.data;
+          found = True;
+        end else begin
+          partialWrite = True;
+        end
       end
     end
+
 
     if (partialWrite == True)
       stallRequest <= tagged Valid e;
