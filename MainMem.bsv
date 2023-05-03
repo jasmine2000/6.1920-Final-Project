@@ -40,7 +40,7 @@ endmodule
 module mkMainMem(MainMem);
     BRAM_Configure cfg = defaultValue();
     BRAM1Port#(LineAddr, CacheLine) bram <- mkBRAM1Server(cfg);
-    DelayLine#(40, CacheLine) dl <- mkDL(); // Delay by 20 cycles
+    DelayLine#(10, CacheLine) dl <- mkDL(); // Delay by 20 cycles
 
     rule deq;
         let r <- bram.portA.response.get();
@@ -51,7 +51,7 @@ module mkMainMem(MainMem);
         bram.portA.request.put(BRAMRequest{
                     write: req.write,
                     responseOnWrite: False,
-                    address: truncate(req.addr >> 2),
+                    address: req.addr,
                     datain: req.data});
     endmethod
 
