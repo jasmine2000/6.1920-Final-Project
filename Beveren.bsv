@@ -35,14 +35,11 @@ module mkBeveren(Empty);
         doinit <= False;
     endrule 
 
-    rule reqs (counterIn <= 50000);
+    rule reqs_cacheline (counterIn <= 500);
        let newrand <- randomCacheReq.next;
        deadlockChecker <= 0;
        CacheReq newreq = newrand;
        newreq.addr = {0,newreq.addr[3:0], 2'b00};
-       
-        // if (newreq.byte_en[0] == 1'b1) newreq.byte_en = 4'b1111;
-        // else newreq.byte_en = 4'b0000;
 
        if ( newreq.byte_en == 4'b0) counterIn <= counterIn + 1;
 
@@ -52,23 +49,35 @@ module mkBeveren(Empty);
        cache.putFromProc(newreq);
     endrule
 
-    // rule reqs (counterIn <= 50000);
-    //    let newrand <- randomCacheReq.next;
-    //    deadlockChecker <= 0;
-    //    CacheReq newreq = newrand;
-    //    newreq.addr = {0,counterIn[9:0], 2'b00};
-    //    newreq.data = counterIn;
-       
-    //    if (newreq.byte_en[0] == 1'b1) newreq.byte_en = 4'b1111;
-    //    else newreq.byte_en = 4'b0000;
+    rule reqs_cache (counterIn <= 6000 && counterIn > 500);
+       let newrand <- randomCacheReq.next;
+       deadlockChecker <= 0;
+       CacheReq newreq = newrand;
+       newreq.addr = {0,newreq.addr[7:0], 2'b00};
 
-    //    if ( newreq.byte_en == 4'b0) counterIn <= counterIn + 1;
+       if ( newreq.byte_en == 4'b0) counterIn <= counterIn + 1;
 
-    //     if (verbose) $display("Sent byte_en: %x, addr: %x, data %x", newreq.byte_en, newreq.addr, newreq.data);
+        if (verbose) $display("Sent byte_en: %x, addr: %x, data %x", newreq.byte_en, newreq.addr, newreq.data);
 
-    //    mainRef.putWord(newreq);
-    //    cache.putFromProc(newreq);
-    // endrule
+       mainRef.putWord(newreq);
+       cache.putFromProc(newreq);
+    endrule
+
+    rule reqs_mem (counterIn <= 50000 && counterIn > 6000);
+       let newrand <- randomCacheReq.next;
+       deadlockChecker <= 0;
+       CacheReq newreq = newrand;
+       newreq.addr = {0,newreq.addr[10:0], 2'b00};
+
+       if ( newreq.byte_en == 4'b0) counterIn <= counterIn + 1;
+
+        if (verbose) $display("Sent byte_en: %x, addr: %x, data %x", newreq.byte_en, newreq.addr, newreq.data);
+
+       mainRef.putWord(newreq);
+       cache.putFromProc(newreq);
+    endrule
+
+
 
 
     rule resps;
