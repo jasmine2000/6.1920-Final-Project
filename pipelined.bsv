@@ -57,7 +57,7 @@ typedef struct {
 module mkpipelined(RVIfc);
     // Interface with memory and devices
     FIFO#(CacheReq) toImem <- mkBypassFIFO;
-    SupFifo#(Word) fromImem <- mkBypassSupFifo;
+    SupFifo#(Word) fromImem <- mkSupFifo;
     FIFO#(CacheReq) toDmem <- mkBypassFIFO;
     FIFO#(Word) fromDmem <- mkBypassFIFO;
     FIFO#(CacheReq) toMMIO <- mkBypassFIFO;
@@ -254,7 +254,6 @@ module mkpipelined(RVIfc);
         labelKonataLeft(lfh,current_id, $format("executing "));
         if (debug) $display("[Execute] ", fshow(dInst));
 
-
         // let from_decode2 = d2eQueue.first2();
         // let current_id2 = from_decode2.k_id;
         // let dInst2 = from_decode.dinst;
@@ -267,8 +266,6 @@ module mkpipelined(RVIfc);
             let rv1 = from_decode.rv1;
             let rv2 = from_decode.rv2;
             let pc1 = from_decode.pc;
-
-            $display("%x: %x %x", pc1, rv1, rv2);
 
             let imm = getImmediate(dInst);
             Bool mmio = False;
