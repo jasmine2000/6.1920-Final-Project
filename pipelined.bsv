@@ -166,7 +166,8 @@ module mkpipelined(RVIfc);
         let rd_idx1 = fields1.rd;
 
         if (scoreboard[rs1_idx1][0] == 0 && 
-            scoreboard[rs2_idx1][0] == 0) begin // no data hazard
+            scoreboard[rs2_idx1][0] == 0 && 
+            scoreboard[rd_idx1][0] == 0) begin // no data hazard
             
             f2dQueue.deq1();
             fromImem.deq1();
@@ -191,49 +192,50 @@ module mkpipelined(RVIfc);
                 end
             end
 
-            // let from_fetch2 = f2dQueue.first2();
-            // let instr2 = fromImem.first2();
-            // let decodedInst2 = decodeInst(instr2);
+            let from_fetch2 = f2dQueue.first2();
+            let instr2 = fromImem.first2();
+            let decodedInst2 = decodeInst(instr2);
 
-            // decodeKonata(lfh, from_fetch2.k_id);
-            // labelKonataLeft(lfh,from_fetch2.k_id, $format("decoded %x ", instr2));
+            decodeKonata(lfh, from_fetch2.k_id);
+            labelKonataLeft(lfh,from_fetch2.k_id, $format("decoded %x ", instr2));
 
-            // if (debug) $display("[Decode] ", fshow(decodedInst2));
+            if (debug) $display("[Decode] ", fshow(decodedInst2));
 
-            // let fields2 = getInstFields(instr2);
-            // let rs1_idx2 = fields2.rs1;
-            // let rs2_idx2 = fields2.rs2;
-            // let rd_idx2 = fields2.rd;
+            let fields2 = getInstFields(instr2);
+            let rs1_idx2 = fields2.rs1;
+            let rs2_idx2 = fields2.rs2;
+            let rd_idx2 = fields2.rd;
 
-            // if (rs1_idx2 != rd_idx1 && // RAW HAZARD
-            //     rs2_idx2 != rd_idx1 && // RAW HAZARD
-            //     rd_idx2 != rd_idx1 && // WAW HAZARD
-            //     scoreboard[rs1_idx2][0] == 0 && 
-            //     scoreboard[rs2_idx2][0] == 0) begin // no data hazard
+            if (rs1_idx2 != rd_idx1 && // RAW HAZARD
+                rs2_idx2 != rd_idx1 && // RAW HAZARD
+                rd_idx2 != rd_idx1 && // WAW HAZARD
+                scoreboard[rs1_idx2][0] == 0 && 
+                scoreboard[rs2_idx2][0] == 0 &&
+                scoreboard[rd_idx2][0] == 0) begin // no data hazard
                 
-            //     f2dQueue.deq2();
-            //     fromImem.deq2();
+                f2dQueue.deq2();
+                fromImem.deq2();
 
-            //     let rs1_2 = (rs1_idx2 ==0 ? 0 : rf[rs1_idx2]);
-            //     let rs2_2 = (rs2_idx2 == 0 ? 0 : rf[rs2_idx2]);
+                let rs1_2 = (rs1_idx2 ==0 ? 0 : rf[rs1_idx2]);
+                let rs2_2 = (rs2_idx2 == 0 ? 0 : rf[rs2_idx2]);
 
-            //     d2eQueue.enq2(D2E {
-            //         dinst: decodedInst2,
-            //         pc: from_fetch2.pc,
-            //         ppc: from_fetch2.ppc,
-            //         epoch: from_fetch2.epoch,
-            //         rv1: rs1_2,
-            //         rv2: rs2_2,
-            //         k_id: from_fetch2.k_id
-            //     });
+                d2eQueue.enq2(D2E {
+                    dinst: decodedInst2,
+                    pc: from_fetch2.pc,
+                    ppc: from_fetch2.ppc,
+                    epoch: from_fetch2.epoch,
+                    rv1: rs1_2,
+                    rv2: rs2_2,
+                    k_id: from_fetch2.k_id
+                });
 
-            //     if (decodedInst2.valid_rd) begin
-            //         if (rd_idx2 != 0) begin 
-            //             scoreboard[rd_idx2][0] <= scoreboard[rd_idx2][0] + 1;
-            //             if(debug) $display("Stalling %x", rd_idx2);
-            //         end
-            //     end
-            // end
+                if (decodedInst2.valid_rd) begin
+                    if (rd_idx2 != 0) begin 
+                        scoreboard[rd_idx2][0] <= scoreboard[rd_idx2][0] + 1;
+                        if(debug) $display("Stalling %x", rd_idx2);
+                    end
+                end
+            end
         end
     endrule
 
@@ -265,6 +267,8 @@ module mkpipelined(RVIfc);
             let rv1 = from_decode.rv1;
             let rv2 = from_decode.rv2;
             let pc1 = from_decode.pc;
+
+            $display("%x: %x %x", pc1, rv1, rv2);
 
             let imm = getImmediate(dInst);
             Bool mmio = False;
