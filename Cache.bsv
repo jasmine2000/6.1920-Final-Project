@@ -6,20 +6,6 @@ import Vector::*;
 import Ehr::*;
 import StoreBuffer::*;
 
-typedef struct {
-    CacheTag tag;
-    CacheIndex index;
-    CacheBlockOffset blockOffset;
-} Address deriving (FShow);
-
-function Address getAddressFields(WordAddr address);
-    return Address {
-        tag: address[31:10],
-        index: address[9:6],
-        blockOffset: address[5:2]
-    };
-endfunction
-
 interface Cache;
     method Action putFromProc(CacheReq e);
     method ActionValue#(Word) getToProc();

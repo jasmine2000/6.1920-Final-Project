@@ -5,20 +5,6 @@ import MemTypes::*;
 import Vector::*;
 import Ehr::*;
 
-typedef struct {
-    Bit#(19) tag;
-    Bit#(7) index;
-    CacheBlockOffset blockOffset;
-} Address deriving (FShow);
-
-function Address getAddressFields(WordAddr address);
-    return Address {
-        tag: address[31:13],
-        index: address[12:6],
-        blockOffset: address[5:2]
-    };
-endfunction
-
 interface ICache;
     method Action putFromProc(CacheReq e);
     method ActionValue#(ICacheResp) getToProc();
@@ -37,7 +23,7 @@ typedef enum {
 module mkICache(ICache);
   BRAM_Configure cfg = defaultValue();
   
-  BRAM2Port#(Bit#(7), CacheLine) cache <- mkBRAM2Server(cfg);
+  BRAM2Port#(CacheIndex, CacheLine) cache <- mkBRAM2Server(cfg);
   Vector#(128, Reg#(Bit#(19))) tags <- replicateM(mkReg('hfff));
 
   Ehr#(3, Maybe#(CacheReq)) currentRequest <- mkEhr(Invalid);
