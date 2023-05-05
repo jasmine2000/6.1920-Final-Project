@@ -8,6 +8,7 @@ interface StoreBuffer;
     method Maybe#(CacheReq) search(CacheReq e);
     method Bool isEmpty();
     method Bool isFull();
+    method Bit#(3) cnt();
 endinterface 
 
 
@@ -49,6 +50,10 @@ module mkstorebuffer(StoreBuffer);
     method Bool isFull();
         return sBuffCnt == 2;
     endmethod 
+
+    method Bit#(3) cnt();
+        return sBuffCnt;
+    endmethod
 
 endmodule
 

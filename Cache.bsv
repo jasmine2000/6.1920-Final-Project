@@ -38,7 +38,7 @@ typedef enum {
 module mkCache(Cache);
   BRAM_Configure cfg = defaultValue();
   
-  Vector#(1, BRAM2Port#(CacheIndex, CacheLine) ) cache <- replicateM(mkBRAM2Server(cfg));
+  Vector#(1, BRAM1PortBE#(CacheIndex, CacheLine, 64) ) cache <- replicateM(mkBRAM1ServerBE(cfg));
   Vector#(1, Vector#(128, Reg#(CacheTag))) tags <- replicateM(replicateM(mkReg('hfff)));
   Vector#(1, Vector#(128, Reg#(Bit#(1)))) dirty <- replicateM(replicateM(mkReg(0)));
 
@@ -86,8 +86,8 @@ module mkCache(Cache);
       if (hit) begin // load hit
         if (debug) $display("%x req load hit", req.addr);
         // Read Line from BRAM
-        let hitreq = BRAMRequest{
-          write: False,
+        let hitreq = BRAMRequestBE{
+          writeen: '0,
           address: address.index,
           datain: ?,
           responseOnWrite: False
@@ -104,8 +104,8 @@ module mkCache(Cache);
 
         if (dirty[newWay][address.index] == 1) begin
           state <= Writeback;
-          let dirtyLine = BRAMRequest{
-            write: False,
+          let dirtyLine = BRAMRequestBE{
+            writeen: '0,
             address: address.index,
             datain: ?,
             responseOnWrite: False
@@ -147,8 +147,8 @@ module mkCache(Cache);
     
       if (debug) $display("done writing %x", lineResp);
 
-      let newLine = BRAMRequest{
-        write: True,
+      let newLine = BRAMRequestBE{
+        writeen: '1,
         address: address.index,
         datain: lineResp,
         responseOnWrite: False
@@ -210,8 +210,8 @@ module mkCache(Cache);
     if (req.byte_en == 0) begin // Read
       toProcQueue.enq(resp[address.blockOffset]);
       
-      let newLine = BRAMRequest{
-        write: True,
+      let newLine = BRAMRequestBE{
+        writeen: '1,
         address: address.index,
         datain: resp,
         responseOnWrite: False
@@ -236,8 +236,8 @@ module mkCache(Cache);
 
       if (debug) $display("new line: %x", resp);
 
-      let newLine = BRAMRequest{
-        write: True,
+      let newLine = BRAMRequestBE{
+        writeen: '1,
         address: address.index,
         datain: resp,
         responseOnWrite: False
@@ -278,17 +278,29 @@ module mkCache(Cache);
     end
 
     if (hit) begin // store hit
-      let hitReq = BRAMRequest{
-        write: False,
+      Bit#(64) write_en = {60'b0, req.byte_en};
+      Bit#(64) long_blockOffset = zeroExtend(address.blockOffset);
+      write_en = write_en << (4*long_blockOffset);
+
+      CacheLine newCacheLine = newVector();
+      newCacheLine[address.blockOffset] = req.data;
+
+      let newLine = BRAMRequestBE{
+        writeen: write_en,
         address: address.index,
-        datain: ?,
+        datain: newCacheLine,
         responseOnWrite: False
       };
-      cache[way].portA.request.put(hitReq);
-      currentRequest[1] <= tagged Valid req;
-      state <= Hit;
+      
+      cache[way].portA.request.put(newLine);
+      dirty[way][address.index] <= 1;
 
-      currentWay <= fromInteger(way);
+      if (store_buffer.cnt()==1 && isValid(stallRequest)) begin // cleared sbuff
+        currentRequest[1] <= stallRequest;
+        stallRequest <= tagged Invalid;
+      end else currentRequest[1] <= tagged Invalid;
+      state <= Ready;
+
 
     end else begin // store miss
       
@@ -297,8 +309,8 @@ module mkCache(Cache);
 
       if (dirty[newWay][address.index] == 1) begin
         state <= Writeback;
-        let dirtyLine = BRAMRequest{
-          write: False,
+        let dirtyLine = BRAMRequestBE{
+          writeen: '0,
           address: address.index,
           datain: ?,
           responseOnWrite: False

@@ -39,10 +39,10 @@ module mkBeveren(Empty);
        let newrand <- randomCacheReq.next;
        deadlockChecker <= 0;
        CacheReq newreq = newrand;
-       newreq.addr = {0,newreq.addr[8:0], 2'b00};
+       newreq.addr = {0,newreq.addr[3:0], 2'b00};
        
-        if (newreq.byte_en[0] == 1'b1) newreq.byte_en = 4'b1111;
-        else newreq.byte_en = 4'b0000;
+        // if (newreq.byte_en[0] == 1'b1) newreq.byte_en = 4'b1111;
+        // else newreq.byte_en = 4'b0000;
 
        if ( newreq.byte_en == 4'b0) counterIn <= counterIn + 1;
 
