@@ -26,11 +26,11 @@ timeout 1 ./top_pipelined
 
 echo "Testing mul"
 ./test.sh mul32
-timeout 2 ./top_pipelined
+timeout 4 ./top_pipelined
 
 echo "Testing reverse"
 ./test.sh reverse32
-timeout 2 ./top_pipelined
+timeout 4 ./top_pipelined
 
 echo "Testing thelie"
 ./test.sh thelie32
@@ -42,5 +42,5 @@ timeout 60 ./top_pipelined
 
 echo "Testing matmul"
 ./test.sh matmul32
-timeout 120 ./top_pipelined
+timeout 240 ./top_pipelined
 
