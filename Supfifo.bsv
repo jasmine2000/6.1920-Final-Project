@@ -146,10 +146,14 @@ module mkBypassSupFifo(SupFifo#(t)) provisos (Bits#(t,tSz), Eq#(t));
     end
     endmethod
 
-    method t first2() if ((can_deq2 || want_enq2[1] != tagged Invalid));
+    method t first2() if ((can_deq2 || want_enq2[1] != tagged Invalid) || (!can_deq2 && can_deq1 && want_enq1[1] != tagged Invalid));
         if (can_deq2) return internalFifos[fifoIdxDeq2].first;
-        else begin if (want_enq2[1] matches tagged Valid .x) return x;
-        else return ?;
+        else begin 
+            if (can_deq1 && !can_deq2 &&& want_enq1[1] matches tagged Valid .x) return x;
+            else begin
+                if (want_enq2[1] matches tagged Valid .x) return x;
+                else return ?;
+            end
         end
     endmethod
 
@@ -157,7 +161,7 @@ module mkBypassSupFifo(SupFifo#(t)) provisos (Bits#(t,tSz), Eq#(t));
         want_deq1[0] <= True;
     endmethod
 
-    method Action deq2 if((want_enq2[1] != tagged Invalid || can_deq2) && !want_deq2[0]);
+    method Action deq2 if((want_enq2[1] != tagged Invalid || can_deq2 || (!can_deq2 && can_deq1 && want_enq1[1] != tagged Invalid)) && !want_deq2[0]);
         want_deq2[0] <= True;
     endmethod
 endmodule

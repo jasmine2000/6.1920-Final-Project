@@ -57,7 +57,7 @@ typedef struct {
 module mkpipelined(RVIfc);
     // Interface with memory and devices
     FIFO#(CacheReq) toImem <- mkBypassFIFO;
-    SupFifo#(Word) fromImem <- mkSupFifo;
+    SupFifo#(Word) fromImem <- mkBypassSupFifo;
     FIFO#(CacheReq) toDmem <- mkBypassFIFO;
     FIFO#(Word) fromDmem <- mkBypassFIFO;
     FIFO#(CacheReq) toMMIO <- mkBypassFIFO;
@@ -240,96 +240,98 @@ module mkpipelined(RVIfc);
     endrule
 
     rule execute if (!starting);
-        let from_decode = d2eQueue.first1();
-        let current_id = from_decode.k_id;
+        let from_decode1 = d2eQueue.first1();
+        let current_id1 = from_decode1.k_id;
 
         d2eQueue.deq1();
 
-        let dInst = from_decode.dinst;
-        let fields = getInstFields(dInst.inst);
+        let dInst1 = from_decode1.dinst;
+        let fields1 = getInstFields(dInst1.inst);
 
         let temp_epoch = epoch[0];
 
-        executeKonata(lfh, current_id);
-        labelKonataLeft(lfh,current_id, $format("executing "));
-        if (debug) $display("[Execute] ", fshow(dInst));
+        executeKonata(lfh, current_id1);
+        labelKonataLeft(lfh,current_id1, $format("executing "));
+        if (debug) $display("[Execute] ", fshow(dInst1));
 
         // let from_decode2 = d2eQueue.first2();
         // let current_id2 = from_decode2.k_id;
-        // let dInst2 = from_decode.dinst;
+        // let dInst2 = from_decode2.dinst;
 
-        // executeKonata(lfh, current_id2);
-        // labelKonataLeft(lfh,current_id2, $format("executing "));
-        // if (debug) $display("[Execute] ", fshow(dInst2));
+        if (from_decode1.epoch == temp_epoch) begin
+            let rv1_1 = from_decode1.rv1;
+            let rv2_1 = from_decode1.rv2;
+            let pc1_1 = from_decode1.pc;
 
-        if (from_decode.epoch == temp_epoch) begin
-            let rv1 = from_decode.rv1;
-            let rv2 = from_decode.rv2;
-            let pc1 = from_decode.pc;
+            let imm1 = getImmediate(dInst1);
+            Bool mmio1 = False;
+            let data1 = execALU32(dInst1.inst, rv1_1, rv2_1, imm1, pc1_1);
+            let isUnsigned1 = 0;
+            let funct3_1 = fields1.funct3;
+            let size1 = funct3_1[1:0];
+            let addr1 = rv1_1 + imm1;
+            Bit#(2) offset1 = addr1[1:0];
 
-            let imm = getImmediate(dInst);
-            Bool mmio = False;
-            let data = execALU32(dInst.inst, rv1, rv2, imm, pc1);
-            let isUnsigned = 0;
-            let funct3 = fields.funct3;
-            let size = funct3[1:0];
-            let addr = rv1 + imm;
-            Bit#(2) offset = addr[1:0];
-
-            if (isMemoryInst(dInst)) begin
+            if (isMemoryInst(dInst1)) begin
                 // Technical details for load byte/halfword/word
-                let shift_amount = {offset, 3'b0};
+                let shift_amount = {offset1, 3'b0};
                 let byte_en = 0;
-                case (size) matches
-                2'b00: byte_en = 4'b0001 << offset;
-                2'b01: byte_en = 4'b0011 << offset;
-                2'b10: byte_en = 4'b1111 << offset;
+                case (size1) matches
+                2'b00: byte_en = 4'b0001 << offset1;
+                2'b01: byte_en = 4'b0011 << offset1;
+                2'b10: byte_en = 4'b1111 << offset1;
                 endcase
-                data = rv2 << shift_amount;
-                addr = {addr[31:2], 2'b0};
-                isUnsigned = funct3[2];
-                let type_mem = (dInst.inst[5] == 1) ? byte_en : 0;
-                let req = CacheReq {byte_en : type_mem,
-                        addr : addr,
-                        data : data};
-                if (isMMIO(addr)) begin 
-                    if (debug) $display("[Execute] MMIO", fshow(req));
-                    toMMIO.enq(req);
-                    labelKonataLeft(lfh,current_id, $format(" MMIO ", fshow(req)));
-                    mmio = True;
+                data1 = rv2_1 << shift_amount;
+                addr1 = {addr1[31:2], 2'b0};
+                isUnsigned1 = funct3_1[2];
+                let type_mem1 = (dInst1.inst[5] == 1) ? byte_en : 0;
+                let req1 = CacheReq {byte_en : type_mem1,
+                        addr : addr1,
+                        data : data1};
+                if (isMMIO(addr1)) begin 
+                    if (debug) $display("[Execute] MMIO", fshow(req1));
+                    toMMIO.enq(req1);
+                    labelKonataLeft(lfh,current_id1, $format(" MMIO ", fshow(req1)));
+                    mmio1 = True;
                 end else begin 
-                    labelKonataLeft(lfh,current_id, $format(" MEM ", fshow(req)));
-                    toDmem.enq(req);
+                    labelKonataLeft(lfh,current_id1, $format(" MEM ", fshow(req1)));
+                    toDmem.enq(req1);
                 end
             end
-            else if (isControlInst(dInst)) begin
-                    labelKonataLeft(lfh,current_id, $format(" Ctrl instr "));
-                    data = pc1 + 4;
+            else if (isControlInst(dInst1)) begin
+                    labelKonataLeft(lfh,current_id1, $format(" Ctrl instr "));
+                    data1 = pc1_1 + 4;
             end else begin 
-                labelKonataLeft(lfh,current_id, $format(" Standard instr "));
+                labelKonataLeft(lfh,current_id1, $format(" Standard instr "));
             end
-            let controlResult = execControl32(dInst.inst, rv1, rv2, imm, pc1);
-            let nextPc = controlResult.nextPC;
-            if (nextPc != from_decode.ppc) begin
+            let controlResult1 = execControl32(dInst1.inst, rv1_1, rv2_1, imm1, pc1_1);
+            let nextPc1 = controlResult1.nextPC;
+            if (nextPc1 != from_decode1.ppc) begin
                 temp_epoch = temp_epoch + 1;
-                pc[0] <= nextPc;
-                labelKonataLeft(lfh,current_id, $format("new pc %x ", nextPc));
+                pc[0] <= nextPc1;
+                labelKonataLeft(lfh,current_id1, $format("new pc %x ", nextPc1));
             end
 
-            labelKonataLeft(lfh,current_id, $format("ALU output: %x " , data));
+            labelKonataLeft(lfh,current_id1, $format("ALU output: %x " , data1));
 
-            let mem_business = MemBusiness { isUnsigned : unpack(isUnsigned), size : size, offset : offset, mmio: mmio};
+            let mem_business = MemBusiness { isUnsigned : unpack(isUnsigned1), size : size1, offset : offset1, mmio: mmio1};
+            
             e2wQueue.enq1(E2W { 
                 mem_business: mem_business,
-                data: data,
-                dinst: dInst,
-                k_id: from_decode.k_id,
+                data: data1,
+                dinst: dInst1,
+                k_id: from_decode1.k_id,
                 valid: True
             });
 
-            // // try execute second instruction if epoch hasn't changed
-            // if (epoch[0] == temp_epoch) begin 
+            // try execute second instruction if epoch hasn't changed
+            // if (epoch[0] == temp_epoch && from_decode2.epoch == temp_epoch) begin 
             //     if (!isMemoryInst(dInst2) && !isControlInst(dInst2)) begin
+
+            //         executeKonata(lfh, current_id2);
+            //         labelKonataLeft(lfh,current_id2, $format("executing "));
+            //         if (debug) $display("[Execute] ", fshow(dInst2));
+
             //         d2eQueue.deq2();
 
             //         let fields2 = getInstFields(dInst2.inst);
@@ -342,7 +344,7 @@ module mkpipelined(RVIfc);
             //         Bool mmio2 = False;
             //         let data2 = execALU32(dInst2.inst, rv1_2, rv2_2, imm2, pc1_2);
             //         let isUnsigned2 = 0;
-            //         let funct32 = fields.funct3;
+            //         let funct32 = fields2.funct3;
             //         let size2 = funct32[1:0];
             //         let addr2 = rv1_2 + imm2;
             //         Bit#(2) offset2 = addr2[1:0];
@@ -352,13 +354,14 @@ module mkpipelined(RVIfc);
             //         let nextPc2 = controlResult2.nextPC;
             //         if (nextPc2 != from_decode2.ppc) begin
             //             temp_epoch = temp_epoch + 1;
-            //             pc[0] <= nextPc;
+            //             pc[0] <= nextPc2;
             //             labelKonataLeft(lfh,current_id2, $format("new pc %x ", nextPc2));
             //         end
 
             //         labelKonataLeft(lfh,current_id2, $format("ALU output: %x " , data2));
 
             //         let mem_business2 = MemBusiness { isUnsigned : unpack(isUnsigned2), size : size2, offset : offset2, mmio: mmio2};
+                    
             //         e2wQueue.enq2(E2W { 
             //             mem_business: mem_business2,
             //             data: data2,
@@ -382,13 +385,13 @@ module mkpipelined(RVIfc);
 
         end else begin
             e2wQueue.enq1(E2W { 
-                dinst: dInst,
-                k_id: from_decode.k_id,
+                dinst: dInst1,
+                k_id: from_decode1.k_id,
                 valid: False,
                 data: ?,
                 mem_business: ?
             });
-            squashed.enq1(current_id);
+            squashed.enq1(current_id1);
 
             // if (from_decode2.epoch != temp_epoch) begin
             //     e2wQueue.enq2(E2W { 
@@ -399,6 +402,7 @@ module mkpipelined(RVIfc);
             //         mem_business: ?
             //     });
             //     squashed.enq2(current_id2);
+            //     d2eQueue.deq2();
             // end
         end
     endrule
