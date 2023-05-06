@@ -64,7 +64,7 @@ module mkpipelined(RVIfc);
     FIFO#(Word) fromMMIO <- mkBypassFIFO;
 
     Ehr#(3, Bit#(32)) pc <- mkEhr(0);
-    Vector#(32, Reg#(Bit#(32))) rf <- replicateM(mkReg(0));
+    Vector#(32, Ehr#(3, Bit#(32))) rf <- replicateM(mkEhr(0));
 
     SupFifo#(F2D) f2dQueue <- mkSupFifo;
     SupFifo#(D2E) d2eQueue <- mkSupFifo;
@@ -72,9 +72,10 @@ module mkpipelined(RVIfc);
 
     Ehr#(2, Bool) allowDecode2 <- mkEhr(False);
     Ehr#(2, Bool) allowExecute2 <- mkEhr(False);
+    Ehr#(2, Bool) allowWriteback2 <- mkEhr(False);
 
     Ehr#(3, Bit#(1)) epoch <- mkEhr(1'b0);
-    Vector#(32, Ehr#(3, Bit#(5))) scoreboard <- replicateM(mkEhr(0));
+    Vector#(32, Ehr#(4, Bit#(5))) scoreboard <- replicateM(mkEhr(0));
 
     Bool debug = False;
 
@@ -174,8 +175,8 @@ module mkpipelined(RVIfc);
             f2dQueue.deq1();
             fromImem.deq1();
 
-            let rs1 = (rs1_idx == 0 ? 0 : rf[rs1_idx]);
-            let rs2 = (rs2_idx == 0 ? 0 : rf[rs2_idx]);
+            let rs1 = (rs1_idx == 0 ? 0 : rf[rs1_idx][0]);
+            let rs2 = (rs2_idx == 0 ? 0 : rf[rs2_idx][0]);
 
             d2eQueue.enq1(D2E {
                 dinst: decodedInst,
@@ -224,8 +225,8 @@ module mkpipelined(RVIfc);
             f2dQueue.deq2();
             fromImem.deq2();
 
-            let rs1 = (rs1_idx == 0 ? 0 : rf[rs1_idx]);
-            let rs2 = (rs2_idx == 0 ? 0 : rf[rs2_idx]);
+            let rs1 = (rs1_idx == 0 ? 0 : rf[rs1_idx][0]);
+            let rs2 = (rs2_idx == 0 ? 0 : rf[rs2_idx][0]);
 
             d2eQueue.enq2(D2E {
                 dinst: decodedInst,
@@ -312,6 +313,7 @@ module mkpipelined(RVIfc);
                 allowExecute2[0] <= True;
                 labelKonataLeft(lfh,current_id, $format(" Standard instr "));
             end
+
             let controlResult = execControl32(dInst.inst, rv1, rv2, imm, pc1);
             let nextPc = controlResult.nextPC;
             if (nextPc != from_decode.ppc) begin
@@ -367,14 +369,8 @@ module mkpipelined(RVIfc);
             });
             squashed.enq2(current_id);
 
-        end else if (from_decode.epoch == epoch[1] && 
-            !isMemoryInst(dInst) &&
-            !isControlInst(dInst)
-            ) begin
-
+        end else if (from_decode.epoch == epoch[1]) begin
             d2eQueue.deq2();
-
-            if (isMemoryInst(dInst) || isControlInst(dInst)) $finish(1);
 
             let rv1 = from_decode.rv1;
             let rv2 = from_decode.rv2;
@@ -389,7 +385,39 @@ module mkpipelined(RVIfc);
             let addr = rv1 + imm;
             Bit#(2) offset = addr[1:0];
  
-            labelKonataLeft(lfh,current_id, $format(" Standard instr "));
+            // labelKonataLeft(lfh,current_id, $format(" Standard instr "));
+            if (isMemoryInst(dInst)) begin
+                // Technical details for load byte/halfword/word
+                let shift_amount = {offset, 3'b0};
+                let byte_en = 0;
+                case (size) matches
+                2'b00: byte_en = 4'b0001 << offset;
+                2'b01: byte_en = 4'b0011 << offset;
+                2'b10: byte_en = 4'b1111 << offset;
+                endcase
+                data = rv2 << shift_amount;
+                addr = {addr[31:2], 2'b0};
+                isUnsigned = funct3[2];
+                let type_mem1 = (dInst.inst[5] == 1) ? byte_en : 0;
+                let req = CacheReq {byte_en : type_mem1,
+                        addr : addr,
+                        data : data};
+                if (isMMIO(addr)) begin 
+                    if (debug) $display("[Execute] MMIO", fshow(req));
+                    toMMIO.enq(req);
+                    labelKonataLeft(lfh,current_id, $format(" MMIO ", fshow(req)));
+                    mmio = True;
+                end else begin 
+                    labelKonataLeft(lfh,current_id, $format(" MEM ", fshow(req)));
+                    toDmem.enq(req);
+                end
+            end
+            else if (isControlInst(dInst)) begin
+                labelKonataLeft(lfh,current_id, $format(" Ctrl instr "));
+                data = pc1 + 4;
+            end else begin 
+                labelKonataLeft(lfh,current_id, $format(" Standard instr "));
+            end
 
             let controlResult = execControl32(dInst.inst, rv1, rv2, imm, pc1);
             let nextPc = controlResult.nextPC;
@@ -410,25 +438,64 @@ module mkpipelined(RVIfc);
                 k_id: from_decode.k_id,
                 valid: True
             });
-
-        end 
-        // else if (from_decode.epoch != epoch[1]) begin
-        //     d2eQueue.deq2();
-        //     e2wQueue.enq2(E2W { 
-        //         dinst: dInst,
-        //         k_id: from_decode.k_id,
-        //         valid: False,
-        //         data: ?,
-        //         mem_business: ?
-        //     });
-        //     squashed.enq2(current_id);
-        // end
+        end
     endrule
 
     rule writeback if (!starting);
-        // TODO
         let from_execute = e2wQueue.first1();
         e2wQueue.deq1();
+
+        let current_id = from_execute.k_id;
+   	    writebackKonata(lfh, current_id);
+        labelKonataLeft(lfh,current_id, $format("writeback "));
+
+        let dInst = from_execute.dinst;
+        let data = from_execute.data;
+        let fields = getInstFields(dInst.inst);
+
+        if (from_execute.valid == True) begin
+            retired.enq(current_id);
+            if (isMemoryInst(dInst)) begin // (* // write_val *)
+                allowWriteback2[0] <= False;
+                let mem_business = from_execute.mem_business;
+                let resp = ?;
+                if (mem_business.mmio) begin 
+                    resp = fromMMIO.first();
+                    fromMMIO.deq();
+                end else if (dInst.inst[5] == 0) begin 
+                    resp = fromDmem.first();
+                    fromDmem.deq();
+                end
+                let mem_data = resp;
+                mem_data = mem_data >> {mem_business.offset ,3'b0};
+                case ({pack(mem_business.isUnsigned), mem_business.size}) matches
+                3'b000 : data = signExtend(mem_data[7:0]);
+                3'b001 : data = signExtend(mem_data[15:0]);
+                3'b100 : data = zeroExtend(mem_data[7:0]);
+                3'b101 : data = zeroExtend(mem_data[15:0]);
+                3'b010 : data = mem_data;
+                endcase
+            end else allowWriteback2[0] <= True;
+            if(debug) $display("[Writeback]", fshow(dInst));
+            if (!dInst.legal) begin
+                if (debug) $display("[Writeback] Illegal Inst, Drop and fault: ", fshow(dInst));
+                // pc <= 0;	// Fault
+            end
+        end else allowWriteback2[0] <= True;
+
+		if (dInst.valid_rd) begin
+            let rd_idx = fields.rd;
+            if (rd_idx != 0) begin 
+                if (from_execute.valid == True) rf[rd_idx][1] <= data;
+                scoreboard[rd_idx][2] <= scoreboard[rd_idx][2] - 1;
+                if(debug) $display("Unstalled %x", rd_idx);
+            end
+		end
+	endrule
+
+    rule writeback2 if (!starting && allowWriteback2[1] == True);
+        let from_execute = e2wQueue.first2();
+        e2wQueue.deq2();
 
         let current_id = from_execute.k_id;
    	    writebackKonata(lfh, current_id);
@@ -470,68 +537,11 @@ module mkpipelined(RVIfc);
 		if (dInst.valid_rd) begin
             let rd_idx = fields.rd;
             if (rd_idx != 0) begin 
-                if (from_execute.valid == True) rf[rd_idx] <= data;
-                scoreboard[rd_idx][2] <= scoreboard[rd_idx][2] - 1;
+                if (from_execute.valid == True) rf[rd_idx][2] <= data;
+                scoreboard[rd_idx][3] <= scoreboard[rd_idx][3] - 1;
                 if(debug) $display("Unstalled %x", rd_idx);
             end
 		end
-
-        // let from_execute2 = e2wQueue.first2();
-
-        // let current_id2 = from_execute2.k_id;
-   	    // writebackKonata(lfh, current_id2);
-        // labelKonataLeft(lfh,current_id2, $format("writeback "));
-
-        // let dInst2 = from_execute2.dinst;
-        // let data2 = from_execute2.data;
-        // let fields2 = getInstFields(dInst2.inst);
-        // let mem_business2 = from_execute2.mem_business;
-
-        // if (!isMemoryInst(dInst) || 
-        //     !isMemoryInst(dInst2) || 
-        //     mem_business2.mmio != mem_business2.mmio ||
-        //     dInst2.inst[5] != dInst2.inst[5])
-        // begin
-        //     queue_incr = queue_incr + 1;
-        //     e2wQueue.deq2();
-
-        //     if (from_execute2.valid == True) begin
-        //         retired.enq(current_id2);
-        //         if (isMemoryInst(dInst2)) begin // (* // write_val *)
-        //             let resp = ?;
-        //             if (mem_business2.mmio) begin 
-        //                 resp = fromMMIO.first();
-        //                 fromMMIO.deq();
-        //             end else if (dInst2.inst[5] == 0) begin 
-        //                 resp = fromDmem.first();
-        //                 fromDmem.deq();
-        //             end
-        //             let mem_data = resp;
-        //             mem_data = mem_data >> {mem_business2.offset ,3'b0};
-        //             case ({pack(mem_business2.isUnsigned), mem_business2.size}) matches
-        //             3'b000 : data2 = signExtend(mem_data[7:0]);
-        //             3'b001 : data2 = signExtend(mem_data[15:0]);
-        //             3'b100 : data2 = zeroExtend(mem_data[7:0]);
-        //             3'b101 : data2 = zeroExtend(mem_data[15:0]);
-        //             3'b010 : data2 = mem_data;
-        //             endcase
-        //         end
-        //         if(debug) $display("[Writeback]", fshow(dInst2));
-        //         if (!dInst2.legal) begin
-        //             if (debug) $display("[Writeback] Illegal Inst, Drop and fault: ", fshow(dInst2));
-        //             // pc <= 0;	// Fault
-        //         end
-        //     end
-
-        //     if (dInst2.valid_rd) begin
-        //         let rd_idx2 = fields2.rd;
-        //         if (rd_idx2 != 0) begin 
-        //             if (from_execute2.valid == True) rf[rd_idx2][1] <= data2;
-        //             scoreboard[rd_idx2][1] <= scoreboard[rd_idx2][1] - 1;
-        //             if(debug) $display("Unstalled %x", rd_idx2);
-        //         end
-        //     end
-        // end
 	endrule
 		
 
