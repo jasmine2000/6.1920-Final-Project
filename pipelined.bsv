@@ -63,15 +63,18 @@ module mkpipelined(RVIfc);
     FIFO#(CacheReq) toMMIO <- mkBypassFIFO;
     FIFO#(Word) fromMMIO <- mkBypassFIFO;
 
-    Ehr#(2, Bit#(32)) pc <- mkEhr(0);
+    Ehr#(3, Bit#(32)) pc <- mkEhr(0);
     Vector#(32, Reg#(Bit#(32))) rf <- replicateM(mkReg(0));
 
     SupFifo#(F2D) f2dQueue <- mkSupFifo;
     SupFifo#(D2E) d2eQueue <- mkSupFifo;
     SupFifo#(E2W) e2wQueue <- mkSupFifo;
 
-    Ehr#(2, Bit#(1)) epoch <- mkEhr(1'b0);
-    Vector#(32, Ehr#(2, Bit#(2))) scoreboard <- replicateM(mkEhr(0));
+    Ehr#(2, Bool) allowDecode2 <- mkEhr(False);
+    Ehr#(2, Bool) allowExecute2 <- mkEhr(False);
+
+    Ehr#(3, Bit#(1)) epoch <- mkEhr(1'b0);
+    Vector#(32, Ehr#(3, Bit#(5))) scoreboard <- replicateM(mkEhr(0));
 
     Bool debug = False;
 
@@ -97,7 +100,7 @@ module mkpipelined(RVIfc);
 	endrule
 		
     rule fetch if (!starting);
-        Bit#(32) pc_fetched = pc[1];
+        Bit#(32) pc_fetched = pc[2];
         Bit#(32) next_pc_predicted = pc_fetched + 4;
         
         if(debug) $display("Fetch %x", pc_fetched);
@@ -125,23 +128,23 @@ module mkpipelined(RVIfc);
             f2dQueue.enq2(F2D { 
                 pc: next_pc_predicted,
                 ppc: next_pc_predicted + 4,
-                epoch: epoch[1],
+                epoch: epoch[2],
                 k_id: iid2
             });
-            pc[1] <= next_pc_predicted + 4;
+            pc[2] <= next_pc_predicted + 4;
         end 
         else 
         begin 
             iid <- fetch1Konata(lfh, fresh_id, 0);
             labelKonataLeft(lfh, iid, $format("PC %x ",pc_fetched));
 
-            pc[1] <= next_pc_predicted;
+            pc[2] <= next_pc_predicted;
         end
 
         f2dQueue.enq1(F2D { 
             pc: pc_fetched,
             ppc: next_pc_predicted,
-            epoch: epoch[1],
+            epoch: epoch[2],
             k_id: iid
         });
 
@@ -149,262 +152,277 @@ module mkpipelined(RVIfc);
 
 
     rule decode if (!starting);
-        let from_fetch1 = f2dQueue.first1();
-        let instr1 = fromImem.first1();
+        let from_fetch = f2dQueue.first1();
+        let instr = fromImem.first1();
         
-        let decodedInst1 = decodeInst(instr1);
+        let decodedInst = decodeInst(instr);
 
-        decodeKonata(lfh, from_fetch1.k_id);
-        labelKonataLeft(lfh,from_fetch1.k_id, $format("decoded %x ", instr1));
-        
+        if (debug) $display("[Decode] ", fshow(decodedInst));
 
-        if (debug) $display("[Decode] ", fshow(decodedInst1));
+        let fields = getInstFields(instr);
+        let rs1_idx = fields.rs1;
+        let rs2_idx = fields.rs2;
+        let rd_idx = fields.rd;
 
-        let fields1 = getInstFields(instr1);
-        let rs1_idx1 = fields1.rs1;
-        let rs2_idx1 = fields1.rs2;
-        let rd_idx1 = fields1.rd;
+        if (scoreboard[rs1_idx][0] == 0 && 
+            scoreboard[rs2_idx][0] == 0
+            ) begin // no data hazard
 
-        if (scoreboard[rs1_idx1][0] == 0 && 
-            scoreboard[rs2_idx1][0] == 0 && 
-            scoreboard[rd_idx1][0] == 0) begin // no data hazard
+            decodeKonata(lfh, from_fetch.k_id);
+            labelKonataLeft(lfh,from_fetch.k_id, $format("decoded %x ", instr));
             
             f2dQueue.deq1();
             fromImem.deq1();
 
-            let rs1_1 = (rs1_idx1 ==0 ? 0 : rf[rs1_idx1]);
-            let rs2_1 = (rs2_idx1 == 0 ? 0 : rf[rs2_idx1]);
+            let rs1 = (rs1_idx == 0 ? 0 : rf[rs1_idx]);
+            let rs2 = (rs2_idx == 0 ? 0 : rf[rs2_idx]);
 
             d2eQueue.enq1(D2E {
-                dinst: decodedInst1,
-                pc: from_fetch1.pc,
-                ppc: from_fetch1.ppc,
-                epoch: from_fetch1.epoch,
-                rv1: rs1_1,
-                rv2: rs2_1,
-                k_id: from_fetch1.k_id
+                dinst: decodedInst,
+                pc: from_fetch.pc,
+                ppc: from_fetch.ppc,
+                epoch: from_fetch.epoch,
+                rv1: rs1,
+                rv2: rs2,
+                k_id: from_fetch.k_id
             });
 
-            if (decodedInst1.valid_rd) begin
-                if (rd_idx1 != 0) begin 
-                    scoreboard[rd_idx1][0] <= scoreboard[rd_idx1][0] + 1;
-                    if(debug) $display("Stalling %x", rd_idx1);
+            if (decodedInst.valid_rd) begin
+                if (rd_idx != 0) begin 
+                    scoreboard[rd_idx][0] <= scoreboard[rd_idx][0] + 1;
+                    if(debug) $display("Stalling %x", rd_idx);
                 end
             end
 
-            let from_fetch2 = f2dQueue.first2();
-            let instr2 = fromImem.first2();
-            let decodedInst2 = decodeInst(instr2);
+            allowDecode2[0] <= True;
 
-            decodeKonata(lfh, from_fetch2.k_id);
-            labelKonataLeft(lfh,from_fetch2.k_id, $format("decoded %x ", instr2));
+        end else allowDecode2[0] <= False;
+    endrule
 
-            if (debug) $display("[Decode] ", fshow(decodedInst2));
+    rule decode2 if (!starting && allowDecode2[1] == True);
+        let from_fetch = f2dQueue.first2();
+        let instr = fromImem.first2();
+        
+        let decodedInst = decodeInst(instr);
 
-            let fields2 = getInstFields(instr2);
-            let rs1_idx2 = fields2.rs1;
-            let rs2_idx2 = fields2.rs2;
-            let rd_idx2 = fields2.rd;
+        if (debug) $display("[Decode] ", fshow(decodedInst));
 
-            if (rs1_idx2 != rd_idx1 && // RAW HAZARD
-                rs2_idx2 != rd_idx1 && // RAW HAZARD
-                rd_idx2 != rd_idx1 && // WAW HAZARD
-                scoreboard[rs1_idx2][0] == 0 && 
-                scoreboard[rs2_idx2][0] == 0 &&
-                scoreboard[rd_idx2][0] == 0) begin // no data hazard
-                
-                f2dQueue.deq2();
-                fromImem.deq2();
+        let fields = getInstFields(instr);
+        let rs1_idx = fields.rs1;
+        let rs2_idx = fields.rs2;
+        let rd_idx = fields.rd;
 
-                let rs1_2 = (rs1_idx2 ==0 ? 0 : rf[rs1_idx2]);
-                let rs2_2 = (rs2_idx2 == 0 ? 0 : rf[rs2_idx2]);
+        if (scoreboard[rs1_idx][1] == 0 && 
+            scoreboard[rs2_idx][1] == 0
+            ) begin // no data hazard
 
-                d2eQueue.enq2(D2E {
-                    dinst: decodedInst2,
-                    pc: from_fetch2.pc,
-                    ppc: from_fetch2.ppc,
-                    epoch: from_fetch2.epoch,
-                    rv1: rs1_2,
-                    rv2: rs2_2,
-                    k_id: from_fetch2.k_id
-                });
+            decodeKonata(lfh, from_fetch.k_id);
+            labelKonataLeft(lfh,from_fetch.k_id, $format("decoded %x ", instr));
 
-                if (decodedInst2.valid_rd) begin
-                    if (rd_idx2 != 0) begin 
-                        scoreboard[rd_idx2][0] <= scoreboard[rd_idx2][0] + 1;
-                        if(debug) $display("Stalling %x", rd_idx2);
-                    end
+            // $display("fired decode2");
+            
+            f2dQueue.deq2();
+            fromImem.deq2();
+
+            let rs1 = (rs1_idx == 0 ? 0 : rf[rs1_idx]);
+            let rs2 = (rs2_idx == 0 ? 0 : rf[rs2_idx]);
+
+            d2eQueue.enq2(D2E {
+                dinst: decodedInst,
+                pc: from_fetch.pc,
+                ppc: from_fetch.ppc,
+                epoch: from_fetch.epoch,
+                rv1: rs1,
+                rv2: rs2,
+                k_id: from_fetch.k_id
+            });
+
+            if (decodedInst.valid_rd) begin
+                if (rd_idx != 0) begin 
+                    scoreboard[rd_idx][1] <= scoreboard[rd_idx][1] + 1;
+                    if(debug) $display("Stalling %x", rd_idx);
                 end
             end
         end
+
+        allowDecode2[1] <= False;
     endrule
 
     rule execute if (!starting);
-        let from_decode1 = d2eQueue.first1();
-        let current_id1 = from_decode1.k_id;
+        let from_decode = d2eQueue.first1();
+        let current_id = from_decode.k_id;
 
         d2eQueue.deq1();
 
-        let dInst1 = from_decode1.dinst;
-        let fields1 = getInstFields(dInst1.inst);
+        let dInst = from_decode.dinst;
+        let fields = getInstFields(dInst.inst);
 
-        let temp_epoch = epoch[0];
+        executeKonata(lfh, current_id);
+        labelKonataLeft(lfh,current_id, $format("executing "));
+        if (debug) $display("[Execute] ", fshow(dInst));
 
-        executeKonata(lfh, current_id1);
-        labelKonataLeft(lfh,current_id1, $format("executing "));
-        if (debug) $display("[Execute] ", fshow(dInst1));
+        let allowExecute = False;
 
-        // let from_decode2 = d2eQueue.first2();
-        // let current_id2 = from_decode2.k_id;
-        // let dInst2 = from_decode2.dinst;
+        if (from_decode.epoch == epoch[0]) begin
+            let rv1 = from_decode.rv1;
+            let rv2 = from_decode.rv2;
+            let pc1 = from_decode.pc;
 
-        if (from_decode1.epoch == temp_epoch) begin
-            let rv1_1 = from_decode1.rv1;
-            let rv2_1 = from_decode1.rv2;
-            let pc1_1 = from_decode1.pc;
+            let imm = getImmediate(dInst);
+            Bool mmio = False;
+            let data = execALU32(dInst.inst, rv1, rv2, imm, pc1);
+            let isUnsigned = 0;
+            let funct3 = fields.funct3;
+            let size = funct3[1:0];
+            let addr = rv1 + imm;
+            Bit#(2) offset = addr[1:0];
 
-            let imm1 = getImmediate(dInst1);
-            Bool mmio1 = False;
-            let data1 = execALU32(dInst1.inst, rv1_1, rv2_1, imm1, pc1_1);
-            let isUnsigned1 = 0;
-            let funct3_1 = fields1.funct3;
-            let size1 = funct3_1[1:0];
-            let addr1 = rv1_1 + imm1;
-            Bit#(2) offset1 = addr1[1:0];
-
-            if (isMemoryInst(dInst1)) begin
+            if (isMemoryInst(dInst)) begin
+                allowExecute2[0] <= False;
                 // Technical details for load byte/halfword/word
-                let shift_amount = {offset1, 3'b0};
+                let shift_amount = {offset, 3'b0};
                 let byte_en = 0;
-                case (size1) matches
-                2'b00: byte_en = 4'b0001 << offset1;
-                2'b01: byte_en = 4'b0011 << offset1;
-                2'b10: byte_en = 4'b1111 << offset1;
+                case (size) matches
+                2'b00: byte_en = 4'b0001 << offset;
+                2'b01: byte_en = 4'b0011 << offset;
+                2'b10: byte_en = 4'b1111 << offset;
                 endcase
-                data1 = rv2_1 << shift_amount;
-                addr1 = {addr1[31:2], 2'b0};
-                isUnsigned1 = funct3_1[2];
-                let type_mem1 = (dInst1.inst[5] == 1) ? byte_en : 0;
-                let req1 = CacheReq {byte_en : type_mem1,
-                        addr : addr1,
-                        data : data1};
-                if (isMMIO(addr1)) begin 
-                    if (debug) $display("[Execute] MMIO", fshow(req1));
-                    toMMIO.enq(req1);
-                    labelKonataLeft(lfh,current_id1, $format(" MMIO ", fshow(req1)));
-                    mmio1 = True;
+                data = rv2 << shift_amount;
+                addr = {addr[31:2], 2'b0};
+                isUnsigned = funct3[2];
+                let type_mem1 = (dInst.inst[5] == 1) ? byte_en : 0;
+                let req = CacheReq {byte_en : type_mem1,
+                        addr : addr,
+                        data : data};
+                if (isMMIO(addr)) begin 
+                    if (debug) $display("[Execute] MMIO", fshow(req));
+                    toMMIO.enq(req);
+                    labelKonataLeft(lfh,current_id, $format(" MMIO ", fshow(req)));
+                    mmio = True;
                 end else begin 
-                    labelKonataLeft(lfh,current_id1, $format(" MEM ", fshow(req1)));
-                    toDmem.enq(req1);
+                    labelKonataLeft(lfh,current_id, $format(" MEM ", fshow(req)));
+                    toDmem.enq(req);
                 end
             end
-            else if (isControlInst(dInst1)) begin
-                    labelKonataLeft(lfh,current_id1, $format(" Ctrl instr "));
-                    data1 = pc1_1 + 4;
+            else if (isControlInst(dInst)) begin
+                allowExecute2[0] <= False;
+                labelKonataLeft(lfh,current_id, $format(" Ctrl instr "));
+                data = pc1 + 4;
             end else begin 
-                labelKonataLeft(lfh,current_id1, $format(" Standard instr "));
+                allowExecute2[0] <= True;
+                labelKonataLeft(lfh,current_id, $format(" Standard instr "));
             end
-            let controlResult1 = execControl32(dInst1.inst, rv1_1, rv2_1, imm1, pc1_1);
-            let nextPc1 = controlResult1.nextPC;
-            if (nextPc1 != from_decode1.ppc) begin
-                temp_epoch = temp_epoch + 1;
-                pc[0] <= nextPc1;
-                labelKonataLeft(lfh,current_id1, $format("new pc %x ", nextPc1));
+            let controlResult = execControl32(dInst.inst, rv1, rv2, imm, pc1);
+            let nextPc = controlResult.nextPC;
+            if (nextPc != from_decode.ppc) begin
+                epoch[0] <= epoch[0] + 1;
+                pc[0] <= nextPc;
+                labelKonataLeft(lfh,current_id, $format("new pc %x ", nextPc));
             end
 
-            labelKonataLeft(lfh,current_id1, $format("ALU output: %x " , data1));
+            labelKonataLeft(lfh,current_id, $format("ALU output: %x " , data));
 
-            let mem_business = MemBusiness { isUnsigned : unpack(isUnsigned1), size : size1, offset : offset1, mmio: mmio1};
+            let mem_business = MemBusiness { isUnsigned : unpack(isUnsigned), size : size, offset : offset, mmio: mmio};
             
             e2wQueue.enq1(E2W { 
                 mem_business: mem_business,
-                data: data1,
-                dinst: dInst1,
-                k_id: from_decode1.k_id,
+                data: data,
+                dinst: dInst,
+                k_id: from_decode.k_id,
                 valid: True
             });
 
-            // try execute second instruction if epoch hasn't changed
-            // if (epoch[0] == temp_epoch && from_decode2.epoch == temp_epoch) begin 
-            //     if (!isMemoryInst(dInst2) && !isControlInst(dInst2)) begin
-
-            //         executeKonata(lfh, current_id2);
-            //         labelKonataLeft(lfh,current_id2, $format("executing "));
-            //         if (debug) $display("[Execute] ", fshow(dInst2));
-
-            //         d2eQueue.deq2();
-
-            //         let fields2 = getInstFields(dInst2.inst);
-
-            //         let rv1_2 = from_decode2.rv1;
-            //         let rv2_2 = from_decode2.rv2;
-            //         let pc1_2 = from_decode2.pc;
-
-            //         let imm2 = getImmediate(dInst2);
-            //         Bool mmio2 = False;
-            //         let data2 = execALU32(dInst2.inst, rv1_2, rv2_2, imm2, pc1_2);
-            //         let isUnsigned2 = 0;
-            //         let funct32 = fields2.funct3;
-            //         let size2 = funct32[1:0];
-            //         let addr2 = rv1_2 + imm2;
-            //         Bit#(2) offset2 = addr2[1:0];
-
-            //         labelKonataLeft(lfh,current_id2, $format(" Standard instr "));
-            //         let controlResult2 = execControl32(dInst2.inst, rv1_2, rv2_2, imm2, pc1_2);
-            //         let nextPc2 = controlResult2.nextPC;
-            //         if (nextPc2 != from_decode2.ppc) begin
-            //             temp_epoch = temp_epoch + 1;
-            //             pc[0] <= nextPc2;
-            //             labelKonataLeft(lfh,current_id2, $format("new pc %x ", nextPc2));
-            //         end
-
-            //         labelKonataLeft(lfh,current_id2, $format("ALU output: %x " , data2));
-
-            //         let mem_business2 = MemBusiness { isUnsigned : unpack(isUnsigned2), size : size2, offset : offset2, mmio: mmio2};
-                    
-            //         e2wQueue.enq2(E2W { 
-            //             mem_business: mem_business2,
-            //             data: data2,
-            //             dinst: dInst2,
-            //             k_id: from_decode2.k_id,
-            //             valid: True
-            //         });
-            //     end
-            // end else begin
-            //     e2wQueue.enq2(E2W { 
-            //         dinst: dInst2,
-            //         k_id: from_decode2.k_id,
-            //         valid: False,
-            //         data: ?,
-            //         mem_business: ?
-            //     });
-            //     squashed.enq1(current_id2);
-            // end
-
-            epoch[0] <= temp_epoch;
-
         end else begin
+            allowExecute2[0] <= True;
             e2wQueue.enq1(E2W { 
-                dinst: dInst1,
-                k_id: from_decode1.k_id,
+                dinst: dInst,
+                k_id: from_decode.k_id,
                 valid: False,
                 data: ?,
                 mem_business: ?
             });
-            squashed.enq1(current_id1);
-
-            // if (from_decode2.epoch != temp_epoch) begin
-            //     e2wQueue.enq2(E2W { 
-            //         dinst: dInst2,
-            //         k_id: from_decode2.k_id,
-            //         valid: False,
-            //         data: ?,
-            //         mem_business: ?
-            //     });
-            //     squashed.enq2(current_id2);
-            //     d2eQueue.deq2();
-            // end
+            squashed.enq1(current_id);
         end
+    endrule
+
+    rule execute2 if (!starting && allowExecute2[1] == True);
+        let from_decode = d2eQueue.first2();
+        let current_id = from_decode.k_id;
+
+        let dInst = from_decode.dinst;
+        let fields = getInstFields(dInst.inst);
+
+        executeKonata(lfh, current_id);
+        labelKonataLeft(lfh,current_id, $format("executing "));
+        if (debug) $display("[Execute] ", fshow(dInst));
+
+        if (from_decode.epoch != epoch[1]) begin
+            d2eQueue.deq2();
+            e2wQueue.enq2(E2W { 
+                dinst: dInst,
+                k_id: from_decode.k_id,
+                valid: False,
+                data: ?,
+                mem_business: ?
+            });
+            squashed.enq2(current_id);
+
+        end else if (from_decode.epoch == epoch[1] && 
+            !isMemoryInst(dInst) &&
+            !isControlInst(dInst)
+            ) begin
+
+            d2eQueue.deq2();
+
+            if (isMemoryInst(dInst) || isControlInst(dInst)) $finish(1);
+
+            let rv1 = from_decode.rv1;
+            let rv2 = from_decode.rv2;
+            let pc1 = from_decode.pc;
+
+            let imm = getImmediate(dInst);
+            Bool mmio = False;
+            let data = execALU32(dInst.inst, rv1, rv2, imm, pc1);
+            let isUnsigned = 0;
+            let funct3 = fields.funct3;
+            let size = funct3[1:0];
+            let addr = rv1 + imm;
+            Bit#(2) offset = addr[1:0];
+ 
+            labelKonataLeft(lfh,current_id, $format(" Standard instr "));
+
+            let controlResult = execControl32(dInst.inst, rv1, rv2, imm, pc1);
+            let nextPc = controlResult.nextPC;
+            if (nextPc != from_decode.ppc) begin
+                epoch[1] <= epoch[1] + 1;
+                pc[1] <= nextPc;
+                labelKonataLeft(lfh,current_id, $format("new pc %x ", nextPc));
+            end
+
+            labelKonataLeft(lfh,current_id, $format("ALU output: %x " , data));
+
+            let mem_business = MemBusiness { isUnsigned : unpack(isUnsigned), size : size, offset : offset, mmio: mmio};
+            
+            e2wQueue.enq2(E2W { 
+                mem_business: mem_business,
+                data: data,
+                dinst: dInst,
+                k_id: from_decode.k_id,
+                valid: True
+            });
+
+        end 
+        // else if (from_decode.epoch != epoch[1]) begin
+        //     d2eQueue.deq2();
+        //     e2wQueue.enq2(E2W { 
+        //         dinst: dInst,
+        //         k_id: from_decode.k_id,
+        //         valid: False,
+        //         data: ?,
+        //         mem_business: ?
+        //     });
+        //     squashed.enq2(current_id);
+        // end
     endrule
 
     rule writeback if (!starting);
@@ -453,7 +471,7 @@ module mkpipelined(RVIfc);
             let rd_idx = fields.rd;
             if (rd_idx != 0) begin 
                 if (from_execute.valid == True) rf[rd_idx] <= data;
-                scoreboard[rd_idx][1] <= scoreboard[rd_idx][1] - 1;
+                scoreboard[rd_idx][2] <= scoreboard[rd_idx][2] - 1;
                 if(debug) $display("Unstalled %x", rd_idx);
             end
 		end
@@ -469,7 +487,7 @@ module mkpipelined(RVIfc);
         // let fields2 = getInstFields(dInst2.inst);
         // let mem_business2 = from_execute2.mem_business;
 
-        // if (!isMemoryInst(dInst1) || 
+        // if (!isMemoryInst(dInst) || 
         //     !isMemoryInst(dInst2) || 
         //     mem_business2.mmio != mem_business2.mmio ||
         //     dInst2.inst[5] != dInst2.inst[5])
