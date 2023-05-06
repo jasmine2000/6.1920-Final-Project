@@ -48,14 +48,14 @@ module mktop_pipelined(Empty);
 
     
     rule requestICacheToMem;
-        memArbiterFifo.enq(1'b0);
         icache_miss <= icache_miss + 1;
         MainMemReq req <- cacheInstruction.getToMem();
+        if (!req.write) memArbiterFifo.enq(1'b0);
         if (debug) $display("Get IReq from Cache ", fshow(req));
         ireq <= req;
         bram.portA.request.put(BRAMRequest{
                     write: req.write,
-                    responseOnWrite: True,
+                    responseOnWrite: False,
                     address: req.addr,
                     datain: req.data});
     endrule
@@ -75,13 +75,13 @@ module mktop_pipelined(Empty);
     
     rule requestDCacheToMem;
         dcache_miss <= dcache_miss + 1;
-        memArbiterFifo.enq(1'b1);
         let req <- cacheData.getToMem();
+        if (!req.write) memArbiterFifo.enq(1'b1);
         if (debug) $display("Get DReq from Cache ", fshow(req));
         dreq <= req;
         bram.portA.request.put(BRAMRequest{
                     write: req.write,
-                    responseOnWrite: True,
+                    responseOnWrite: False,
                     address: req.addr,
                     datain: req.data});
     endrule
