@@ -83,7 +83,7 @@ module mkpipelined(RVIfc);
     String dumpFile = "output.log" ;
     let lfh <- mkReg(InvalidFile);
 	Reg#(KonataId) fresh_id <- mkReg(0);
-	Reg#(KonataId) commit_id <- mkReg(0);
+	Ehr#(2, KonataId) commit_id <- mkEhr(0);
 
 	SupFifo#(KonataId) retired <- mkSupFifo;
 	SupFifo#(KonataId) squashed <- mkSupFifo;
@@ -101,7 +101,7 @@ module mkpipelined(RVIfc);
 	endrule
 
     rule debugger2;
-        $display(pc[0]);
+        $display("curr pc: %x", pc[0]);
     endrule
 
     rule debugger;
@@ -572,12 +572,26 @@ module mkpipelined(RVIfc);
     rule administrative_konata_commit;
 		    retired.deq1();
 		    let f = retired.first1();
-		    commitKonata(lfh, f, commit_id);
+            $fdisplay(lfh,"R\t%d\t%d\t%d", f, commit_id[0],0);
+            commit_id[0] <= commit_id[0] + 1;
 	endrule
 		
 	rule administrative_konata_flush;
 		    squashed.deq1();
 		    let f = squashed.first1();
+		    squashKonata(lfh, f);
+	endrule
+
+    rule administrative_konata_commit2;
+		    retired.deq2();
+		    let f = retired.first2();
+            $fdisplay(lfh,"R\t%d\t%d\t%d", f, commit_id[1],0);
+            commit_id[1] <= commit_id[1] + 1;
+	endrule
+		
+	rule administrative_konata_flush2;
+		    squashed.deq2();
+		    let f = squashed.first2();
 		    squashKonata(lfh, f);
 	endrule
 		
