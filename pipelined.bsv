@@ -58,10 +58,10 @@ module mkpipelined(RVIfc);
     // Interface with memory and devices
     FIFO#(CacheReq) toImem <- mkBypassFIFO;
     SupFifo#(Word) fromImem <- mkBypassSupFifo;
-    FIFO#(CacheReq) toDmem <- mkBypassFIFO;
-    FIFO#(Word) fromDmem <- mkBypassFIFO;
-    FIFO#(CacheReq) toMMIO <- mkBypassFIFO;
-    FIFO#(Word) fromMMIO <- mkBypassFIFO;
+    SupFifo#(CacheReq) toDmem <- mkBypassSupFifo;
+    SupFifo#(Word) fromDmem <- mkBypassSupFifo;
+    SupFifo#(CacheReq) toMMIO <- mkBypassSupFifo;
+    SupFifo#(Word) fromMMIO <- mkBypassSupFifo;
 
     Ehr#(3, Bit#(32)) pc <- mkEhr(0);
     Vector#(32, Ehr#(3, Bit#(32))) rf <- replicateM(mkEhr(0));
@@ -77,6 +77,7 @@ module mkpipelined(RVIfc);
     Ehr#(3, Bit#(1)) epoch <- mkEhr(1'b0);
     Vector#(32, Ehr#(4, Bit#(5))) scoreboard <- replicateM(mkEhr(0));
 
+    Reg#(Bit#(32)) cycles <- mkReg(0);
     Bool debug = False;
 
 	// Code to support Konata visualization
@@ -99,28 +100,12 @@ module mkpipelined(RVIfc);
         end
 		konataTic(lfh);
 	endrule
-
-    // rule debugger2;
-    //     $display("curr pc: %x", pc[0]);
-    // endrule
-
-    // rule debugger;
-    //     if (allowWriteback2[1] == True) begin
-    //         let y = e2wQueue.first2();
-    //         $display("can writeback2!");
-    //     end
-    // endrule
 		
     rule fetch if (!starting);
         Bit#(32) pc_fetched = pc[2];
         Bit#(32) next_pc_predicted = pc_fetched + 4;
         
         if(debug) $display("Fetch %x", pc_fetched);
-        // You should put the pc that you fetch in pc_fetched
-        // Below is the code to support Konata's visualization
-		
-
-        // TODO implement fetch
         
         let req = CacheReq {
             byte_en : 0,
@@ -182,7 +167,6 @@ module mkpipelined(RVIfc);
 
             decodeKonata(lfh, from_fetch.k_id);
             labelKonataLeft(lfh,from_fetch.k_id, $format("decoded %x ", instr));
-
 
             f2dQueue.deq1();
             fromImem.deq1();
@@ -272,8 +256,6 @@ module mkpipelined(RVIfc);
         labelKonataLeft(lfh,current_id, $format("executing "));
         if (debug) $display("[Execute] ", fshow(dInst));
 
-        let allowExecute = False;
-
         if (from_decode.epoch == epoch[0]) begin
             let rv1 = from_decode.rv1;
             let rv2 = from_decode.rv2;
@@ -307,16 +289,16 @@ module mkpipelined(RVIfc);
                         data : data};
                 if (isMMIO(addr)) begin 
                     if (debug) $display("[Execute] MMIO", fshow(req));
-                    toMMIO.enq(req);
+                    toMMIO.enq1(req);
                     labelKonataLeft(lfh,current_id, $format(" MMIO ", fshow(req)));
                     mmio = True;
                 end else begin 
                     labelKonataLeft(lfh,current_id, $format(" MEM ", fshow(req)));
-                    toDmem.enq(req);
+                    toDmem.enq1(req);
                 end
             end
             else if (isControlInst(dInst)) begin
-                allowExecute2[0] <= False;
+                allowExecute2[0] <= True;
                 labelKonataLeft(lfh,current_id, $format(" Ctrl instr "));
                 data = pc1 + 4;
             end else begin 
@@ -364,6 +346,8 @@ module mkpipelined(RVIfc);
         let dInst = from_decode.dinst;
         let fields = getInstFields(dInst.inst);
 
+        allowExecute2[1] <= False;
+
         executeKonata(lfh, current_id);
         labelKonataLeft(lfh,current_id, $format("executing "));
         if (debug) $display("[Execute] ", fshow(dInst));
@@ -380,7 +364,7 @@ module mkpipelined(RVIfc);
             squashed.enq2(current_id);
 
         end else if (from_decode.epoch == epoch[1]
-             && !isMemoryInst(dInst) && !isControlInst(dInst) // comment
+             && !isMemoryInst(dInst)
              ) begin
             d2eQueue.deq2();
 
@@ -396,8 +380,6 @@ module mkpipelined(RVIfc);
             let size = funct3[1:0];
             let addr = rv1 + imm;
             Bit#(2) offset = addr[1:0];
- 
-            labelKonataLeft(lfh,current_id, $format(" Standard instr ")); // comment
 
             // if (isMemoryInst(dInst)) begin
             //     // Technical details for load byte/halfword/word
@@ -417,20 +399,21 @@ module mkpipelined(RVIfc);
             //             data : data};
             //     if (isMMIO(addr)) begin 
             //         if (debug) $display("[Execute] MMIO", fshow(req));
-            //         toMMIO.enq(req);
+            //         toMMIO.enq2(req);
             //         labelKonataLeft(lfh,current_id, $format(" MMIO ", fshow(req)));
             //         mmio = True;
             //     end else begin 
             //         labelKonataLeft(lfh,current_id, $format(" MEM ", fshow(req)));
-            //         toDmem.enq(req);
+            //         toDmem.enq2(req);
             //     end
-            // end
-            // else if (isControlInst(dInst)) begin
-            //     labelKonataLeft(lfh,current_id, $format(" Ctrl instr "));
-            //     data = pc1 + 4;
-            // end else begin 
-            //     labelKonataLeft(lfh,current_id, $format(" Standard instr "));
-            // end
+            // end else 
+
+            if (isControlInst(dInst)) begin
+                labelKonataLeft(lfh,current_id, $format(" Ctrl instr "));
+                data = pc1 + 4;
+            end else begin 
+                labelKonataLeft(lfh,current_id, $format(" Standard instr "));
+            end
 
             let controlResult = execControl32(dInst.inst, rv1, rv2, imm, pc1);
             let nextPc = controlResult.nextPC;
@@ -473,11 +456,11 @@ module mkpipelined(RVIfc);
                 let mem_business = from_execute.mem_business;
                 let resp = ?;
                 if (mem_business.mmio) begin 
-                    resp = fromMMIO.first();
-                    fromMMIO.deq();
+                    resp = fromMMIO.first1();
+                    fromMMIO.deq1();
                 end else if (dInst.inst[5] == 0) begin 
-                    resp = fromDmem.first();
-                    fromDmem.deq();
+                    resp = fromDmem.first1();
+                    fromDmem.deq1();
                 end
                 let mem_data = resp;
                 mem_data = mem_data >> {mem_business.offset ,3'b0};
@@ -510,6 +493,8 @@ module mkpipelined(RVIfc);
         let from_execute = e2wQueue.first2();
         let dInst = from_execute.dinst;
 
+        allowWriteback2[1] <= False;
+
         if (!isMemoryInst(dInst) || from_execute.valid == False) begin
 
             e2wQueue.deq2();
@@ -523,15 +508,16 @@ module mkpipelined(RVIfc);
 
             if (from_execute.valid == True) begin
                 retired.enq2(current_id);
+
                 // if (isMemoryInst(dInst)) begin // (* // write_val *)
                 //     let mem_business = from_execute.mem_business;
                 //     let resp = ?;
                 //     if (mem_business.mmio) begin 
-                //         resp = fromMMIO.first();
-                //         fromMMIO.deq();
+                //         resp = fromMMIO.first2();
+                //         fromMMIO.deq2();
                 //     end else if (dInst.inst[5] == 0) begin 
-                //         resp = fromDmem.first();
-                //         fromDmem.deq();
+                //         resp = fromDmem.first2();
+                //         fromDmem.deq2();
                 //     end
                 //     let mem_data = resp;
                 //     mem_data = mem_data >> {mem_business.offset ,3'b0};
@@ -543,6 +529,7 @@ module mkpipelined(RVIfc);
                 //     3'b010 : data = mem_data;
                 //     endcase
                 // end
+
                 if(debug) $display("[Writeback]", fshow(dInst));
                 if (!dInst.legal) begin
                     if (debug) $display("[Writeback] Illegal Inst, Drop and fault: ", fshow(dInst));
@@ -600,17 +587,17 @@ module mkpipelined(RVIfc);
         if (isValid(a.i2)) fromImem.enq2(fromMaybe(?, a.i2));
     endmethod
     method ActionValue#(CacheReq) getDReq();
-		toDmem.deq();
-		return toDmem.first();
+		toDmem.deq1();
+		return toDmem.first1();
     endmethod
     method Action getDResp(Word a);
-		fromDmem.enq(a);
+		fromDmem.enq1(a);
     endmethod
     method ActionValue#(CacheReq) getMMIOReq();
-		toMMIO.deq();
-		return toMMIO.first();
+		toMMIO.deq1();
+		return toMMIO.first1();
     endmethod
     method Action getMMIOResp(Word a);
-		fromMMIO.enq(a);
+		fromMMIO.enq1(a);
     endmethod
 endmodule
