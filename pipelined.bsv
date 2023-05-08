@@ -100,16 +100,16 @@ module mkpipelined(RVIfc);
 		konataTic(lfh);
 	endrule
 
-    rule debugger2;
-        $display("curr pc: %x", pc[0]);
-    endrule
+    // rule debugger2;
+    //     $display("curr pc: %x", pc[0]);
+    // endrule
 
-    rule debugger;
-        if (allowWriteback2[1] == True) begin
-            let y = e2wQueue.first2();
-            $display("can writeback2!");
-        end
-    endrule
+    // rule debugger;
+    //     if (allowWriteback2[1] == True) begin
+    //         let y = e2wQueue.first2();
+    //         $display("can writeback2!");
+    //     end
+    // endrule
 		
     rule fetch if (!starting);
         Bit#(32) pc_fetched = pc[2];
@@ -182,7 +182,8 @@ module mkpipelined(RVIfc);
 
             decodeKonata(lfh, from_fetch.k_id);
             labelKonataLeft(lfh,from_fetch.k_id, $format("decoded %x ", instr));
-            
+
+
             f2dQueue.deq1();
             fromImem.deq1();
 
@@ -230,8 +231,6 @@ module mkpipelined(RVIfc);
 
             decodeKonata(lfh, from_fetch.k_id);
             labelKonataLeft(lfh,from_fetch.k_id, $format("decoded %x ", instr));
-
-            // $display("fired decode2");
             
             f2dQueue.deq2();
             fromImem.deq2();
@@ -368,8 +367,6 @@ module mkpipelined(RVIfc);
         executeKonata(lfh, current_id);
         labelKonataLeft(lfh,current_id, $format("executing "));
         if (debug) $display("[Execute] ", fshow(dInst));
-
-        $display("execute2");
 
         if (from_decode.epoch != epoch[1]) begin
             d2eQueue.deq2();
@@ -513,11 +510,9 @@ module mkpipelined(RVIfc);
         let from_execute = e2wQueue.first2();
         let dInst = from_execute.dinst;
 
-        if (from_execute.valid == False || !isMemoryInst(dInst)) begin
+        if (!isMemoryInst(dInst) || from_execute.valid == False) begin
 
             e2wQueue.deq2();
-
-            $display("writeback2");
 
             let current_id = from_execute.k_id;
             writebackKonata(lfh, current_id);
@@ -554,13 +549,14 @@ module mkpipelined(RVIfc);
                     // pc <= 0;	// Fault
                 end
 
-                if (dInst.valid_rd) begin
-                    let rd_idx = fields.rd;
-                    if (rd_idx != 0) begin 
-                        if (from_execute.valid == True) rf[rd_idx][2] <= data;
-                        scoreboard[rd_idx][3] <= scoreboard[rd_idx][3] - 1;
-                        if(debug) $display("Unstalled %x", rd_idx);
-                    end
+                
+            end
+            if (dInst.valid_rd) begin
+                let rd_idx = fields.rd;
+                if (rd_idx != 0) begin 
+                    if (from_execute.valid == True) rf[rd_idx][2] <= data;
+                    scoreboard[rd_idx][3] <= scoreboard[rd_idx][3] - 1;
+                    if(debug) $display("Unstalled %x", rd_idx);
                 end
             end
         end
