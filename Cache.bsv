@@ -27,6 +27,8 @@ module mkCache(Cache);
   Vector#(4, BRAM1PortBE#(CacheIndex, CacheLine, 64) ) cache <- replicateM(mkBRAM1ServerBE(cfg));
   Vector#(4, Vector#(32, Reg#(CacheTag))) tags <- replicateM(replicateM(mkReg('hfff)));
   Vector#(4, Vector#(32, Reg#(Bit#(1)))) dirty <- replicateM(replicateM(mkReg(0)));
+  
+  Vector#(32, Vector#(4, Reg#(Bit#(2)))) rrpv <- replicateM(replicateM(mkReg(2'h3)));
 
   Ehr#(2, Maybe#(CacheReq)) currentRequest <- mkEhr(Invalid);
   Reg#(Maybe#(CacheReq)) stallRequest <- mkReg(Invalid);
@@ -42,6 +44,56 @@ module mkCache(Cache);
   Reg#(Bit#(2)) currentWay <- mkReg(0);
 
   Reg#(Bool) debug <- mkReg(False);
+
+
+  function ActionValue#(Bit#(2)) replacementPolicy(CacheIndex idx);
+    
+    Bit#(2) max_upper = ?;
+    Bit#(2) way_upper = ?;
+
+    Bit#(2) max_lower = ?;
+    Bit#(2) way_lower = ?;
+
+    Bit#(2) max = ?;
+    Bit#(2) way = ?;
+
+    if (rrpv[idx][0] > rrpv[idx][1]) begin
+      max_lower = rrpv[idx][0];
+      way_lower = 2'h0;
+    end else begin
+      max_lower = rrpv[idx][1];
+      way_lower = 2'h1;
+    end
+
+    if (rrpv[idx][2] > rrpv[idx][3]) begin
+      max_upper = rrpv[idx][2];
+      way_upper = 2'h2;
+    end else begin
+      max_upper = rrpv[idx][3];
+      way_upper = 2'h3;
+    end
+
+    if (max_lower > max_upper) begin
+      max = max_lower;
+      way = way_lower;
+    end else begin
+      max = max_upper;
+      way = way_upper;
+    end
+
+  return (
+    actionvalue
+      // Increment all if 3 not found
+      for (Integer i = 0; i < 4; i = i + 1) begin
+        if (fromInteger(i)!=way) rrpv[idx][i] <= rrpv[idx][i] + (2'h3 - max);
+      end
+      rrpv[idx][way] <= 2'h2;
+      return  way;
+    endactionvalue
+  );
+
+
+  endfunction
 
   rule newReq if (
     state == Ready &&
@@ -71,6 +123,9 @@ module mkCache(Cache);
       
       if (hit) begin // load hit
         if (debug) $display("%x req load hit", req.addr);
+        
+        rrpv[address.index][way] <= 2'b0;
+
         // Read Line from BRAM
         let hitreq = BRAMRequestBE{
           writeen: '0,
@@ -85,7 +140,7 @@ module mkCache(Cache);
       end else begin // load miss
         if (debug) $display("%x req load miss", req.addr);
         
-        Bit#(2) newWay = currentWay + 1; // TODO replacement policy
+        Bit#(2) newWay <- replacementPolicy(address.index);// currentWay + 1; // TODO replacement policy
         currentWay <= newWay;
 
         if (dirty[newWay][address.index] == 1) begin
@@ -118,36 +173,7 @@ module mkCache(Cache);
       toProcQueue.enq(lineResp[address.blockOffset]);
       currentRequest[1] <= tagged Invalid;
     end else begin
-      if (debug) $display("writing %x to %x", req.data, lineResp);
-
       $display("SHOULD NOT GET HERE");
-
-      Bit#(32) mask = ?;
-      for (Integer i = 0; i < 4; i = i + 1)
-      begin
-        for (Integer j = 0; j < 8; j = j + 1)
-        begin
-          mask[8*i + j] = req.byte_en[i];
-        end
-      end
-
-      lineResp[address.blockOffset] = (lineResp[address.blockOffset] & (~mask) ) | (req.data & mask);
-    
-      if (debug) $display("done writing %x", lineResp);
-
-      let newLine = BRAMRequestBE{
-        writeen: '1,
-        address: address.index,
-        datain: lineResp,
-        responseOnWrite: False
-      };
-      cache[currentWay].portA.request.put(newLine);
-      dirty[currentWay][address.index] <= 1;
-
-      if (store_buffer.isEmpty() && isValid(stallRequest)) begin // cleared sbuff
-        currentRequest[1] <= stallRequest;
-        stallRequest <= tagged Invalid;
-      end else currentRequest[1] <= tagged Invalid;
     end
     state <= Ready;
   endrule
@@ -266,6 +292,8 @@ module mkCache(Cache);
     end
 
     if (hit) begin // store hit
+      rrpv[address.index][way] <= 2'b0;
+      
       Bit#(64) write_en = {60'b0, req.byte_en};
       Bit#(64) long_blockOffset = zeroExtend(address.blockOffset);
       write_en = write_en << (4*long_blockOffset);
@@ -292,7 +320,7 @@ module mkCache(Cache);
 
     end else begin // store miss
       
-      Bit#(2) newWay = currentWay + 1; // TODO replacement policy
+      Bit#(2) newWay <- replacementPolicy(address.index);// currentWay + 1; // TODO replacement policy
       currentWay <= newWay;
 
       if (dirty[newWay][address.index] == 1) begin
