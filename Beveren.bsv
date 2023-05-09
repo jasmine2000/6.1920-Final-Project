@@ -76,7 +76,7 @@ module mkBeveren(Empty);
        let newrand <- randomCacheReq.next;
        deadlockChecker <= 0;
        CacheReq newreq = newrand;
-       newreq.addr = {0,newreq.addr[7:0], 2'b00};
+       newreq.addr = {0,newreq.addr[5:0], 2'b00};
 
        if ( newreq.byte_en == 4'b0) counterIn <= counterIn + 1;
 
