@@ -35,7 +35,30 @@ module mkBeveren(Empty);
         doinit <= False;
     endrule 
 
-    rule reqs_cacheline (counterIn <= 500);
+    rule test_srrip (counterIn <= 10);
+        let newrand <- randomCacheReq.next;
+        deadlockChecker <= 0;
+        CacheReq newreq = newrand;
+        case (counterIn) matches
+            0 : newreq.addr = 32'b000_00001_0000_00;
+            1 : newreq.addr = 32'b001_00001_0000_00;
+            2 : newreq.addr = 32'b000_00001_0000_00;
+            3 : newreq.addr = 32'b001_00001_0000_00;
+            4 : newreq.addr = 32'b010_00001_0000_00;
+            5 : newreq.addr = 32'b011_00001_0000_00;
+            6 : newreq.addr = 32'b100_00001_0000_00;
+            7 : newreq.addr = 32'b101_00001_0000_00;
+            8 : newreq.addr = 32'b000_00001_0000_00;
+            9 : newreq.addr = 32'b001_00001_0000_00;
+        endcase
+
+        if (verbose) $display("Sent byte_en: %x, addr: %x, data %x", newreq.byte_en, newreq.addr, newreq.data);
+
+       mainRef.putWord(newreq);
+       cache.putFromProc(newreq);
+    endrule
+
+    rule reqs_cacheline (counterIn <= 500 && counterIn <);
        let newrand <- randomCacheReq.next;
        deadlockChecker <= 0;
        CacheReq newreq = newrand;
