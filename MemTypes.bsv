@@ -2,8 +2,8 @@ import Vector::*;
 
 typedef Bit#(26) LineAddr;
 typedef Bit#(4) CacheBlockOffset;
-typedef Bit#(7) CacheIndex;
-typedef Bit#(19) CacheTag;
+typedef Bit#(4) CacheIndex;
+typedef Bit#(22) CacheTag;
 typedef Bit#(32) WordAddr;
 
 typedef Bit#(32) Word;
@@ -23,8 +23,8 @@ typedef struct {
 
 function Address getAddressFields(WordAddr address);
     return Address {
-      tag: address[31:13],
-      index: address[12:6],
+      tag: address[31:10],
+      index: address[9:6],
       blockOffset: address[5:2]
     };
 endfunction

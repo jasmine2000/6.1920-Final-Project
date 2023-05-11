@@ -1,0 +1,55 @@
+Testing add
+Warning: file 'memlines.vmh' for memory 'bram_memory' has a gap at addresses 67 to 127.
+Warning: file 'memlines.vmh' for memory 'bram_memory' has a gap at addresses 129 to 67108863.
+Icache Misses: 00000007
+Dcache Misses: 00000002
+Testing and
+Warning: file 'memlines.vmh' for memory 'bram_memory' has a gap at addresses 67 to 127.
+Warning: file 'memlines.vmh' for memory 'bram_memory' has a gap at addresses 129 to 67108863.
+Icache Misses: 00000007
+Dcache Misses: 00000002
+Testing or
+Warning: file 'memlines.vmh' for memory 'bram_memory' has a gap at addresses 67 to 127.
+Warning: file 'memlines.vmh' for memory 'bram_memory' has a gap at addresses 129 to 67108863.
+Icache Misses: 00000007
+Dcache Misses: 00000002
+Testing sub
+Warning: file 'memlines.vmh' for memory 'bram_memory' has a gap at addresses 67 to 127.
+Warning: file 'memlines.vmh' for memory 'bram_memory' has a gap at addresses 129 to 67108863.
+Icache Misses: 00000007
+Dcache Misses: 00000002
+Testing xor
+Warning: file 'memlines.vmh' for memory 'bram_memory' has a gap at addresses 67 to 127.
+Warning: file 'memlines.vmh' for memory 'bram_memory' has a gap at addresses 129 to 67108863.
+Icache Misses: 00000007
+Dcache Misses: 00000002
+Testing hello
+Warning: file 'memlines.vmh' for memory 'bram_memory' has a gap at addresses 68 to 127.
+Warning: file 'memlines.vmh' for memory 'bram_memory' has a gap at addresses 129 to 67108863.
+Icache Misses: 00000009
+Dcache Misses: 00000003
+Testing mul
+Warning: file 'memlines.vmh' for memory 'bram_memory' has a gap at addresses 71 to 127.
+Warning: file 'memlines.vmh' for memory 'bram_memory' has a gap at addresses 129 to 67108863.
+Icache Misses: 00000008
+Dcache Misses: 00000002
+Testing reverse
+Warning: file 'memlines.vmh' for memory 'bram_memory' has a gap at addresses 70 to 127.
+Warning: file 'memlines.vmh' for memory 'bram_memory' has a gap at addresses 129 to 67108863.
+Icache Misses: 0000000b
+Dcache Misses: 00000007
+Testing thelie
+Warning: file 'memlines.vmh' for memory 'bram_memory' has a gap at addresses 91 to 127.
+Warning: file 'memlines.vmh' for memory 'bram_memory' has a gap at addresses 129 to 67108863.
+Icache Misses: 00000009
+Dcache Misses: 00000158
+Testing thuemorse
+Warning: file 'memlines.vmh' for memory 'bram_memory' has a gap at addresses 71 to 127.
+Warning: file 'memlines.vmh' for memory 'bram_memory' has a gap at addresses 129 to 67108863.
+Icache Misses: 0000000a
+Dcache Misses: 00000003
+Testing matmul
+Warning: file 'memlines.vmh' for memory 'bram_memory' has a gap at addresses 106 to 127.
+Warning: file 'memlines.vmh' for memory 'bram_memory' has a gap at addresses 193 to 67108863.
+Icache Misses: 0000002c
+Dcache Misses: 00000ce8
