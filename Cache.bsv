@@ -25,10 +25,10 @@ module mkCache(Cache);
   BRAM_Configure cfg = defaultValue();
   
   Vector#(4, BRAM1PortBE#(CacheIndex, CacheLine, 64) ) cache <- replicateM(mkBRAM1ServerBE(cfg));
-  Vector#(4, Vector#(32, Reg#(CacheTag))) tags <- replicateM(replicateM(mkReg('hfff)));
-  Vector#(4, Vector#(32, Reg#(Bit#(1)))) dirty <- replicateM(replicateM(mkReg(0)));
+  Vector#(4, Vector#(4, Reg#(CacheTag))) tags <- replicateM(replicateM(mkReg('hfff)));
+  Vector#(4, Vector#(4, Reg#(Bit#(1)))) dirty <- replicateM(replicateM(mkReg(0)));
   
-  Vector#(32, Vector#(4, Reg#(Bit#(2)))) rrpv <- replicateM(replicateM(mkReg(2'h3)));
+  Vector#(4, Vector#(4, Reg#(Bit#(2)))) rrpv <- replicateM(replicateM(mkReg(2'h3)));
 
   Ehr#(2, Maybe#(CacheReq)) currentRequest <- mkEhr(Invalid);
   Reg#(Maybe#(CacheReq)) stallRequest <- mkReg(Invalid);
