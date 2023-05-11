@@ -143,6 +143,7 @@ module mktop_pipelined(Empty);
                         $fdisplay(stderr, "  [0;31mFAIL[0m (%0d)", req.data);
                     end
                 $fflush(stderr);
+                $display("cycles: %x", cycle_count);
                 $finish;
             end
 

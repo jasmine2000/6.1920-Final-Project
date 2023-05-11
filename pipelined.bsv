@@ -557,6 +557,7 @@ module mkpipelined(RVIfc);
 		    let f = retired.first1();
             $fdisplay(lfh,"R\t%d\t%d\t%d", f, commit_id[0],0);
             commit_id[0] <= commit_id[0] + 1;
+            // $display(commit_id[0]);
 	endrule
 		
 	rule administrative_konata_flush;
@@ -570,6 +571,7 @@ module mkpipelined(RVIfc);
 		    let f = retired.first2();
             $fdisplay(lfh,"R\t%d\t%d\t%d", f, commit_id[1],0);
             commit_id[1] <= commit_id[1] + 1;
+            // $display(commit_id[1]);
 	endrule
 		
 	rule administrative_konata_flush2;
