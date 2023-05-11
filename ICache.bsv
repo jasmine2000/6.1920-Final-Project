@@ -24,11 +24,7 @@ module mkICache(ICache);
   BRAM_Configure cfg = defaultValue();
   
   BRAM2Port#(CacheIndex, CacheLine) cache <- mkBRAM2Server(cfg);
-<<<<<<< HEAD
   Vector#(16, Ehr#(2, CacheTag)) tags <- replicateM(mkEhr('hfff));
-=======
-  Vector#(32, Ehr#(2, CacheTag)) tags <- replicateM(mkEhr('hfff));
->>>>>>> Implemented SRRIP
 
   // Reg#(LineAddr) currentAddr <- mkReg('hfff);
   // Reg#(CacheLine) currentLine <- mkReg(unpack('hfff));
