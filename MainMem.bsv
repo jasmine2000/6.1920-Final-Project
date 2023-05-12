@@ -39,6 +39,7 @@ endmodule
 
 module mkMainMem(MainMem);
     BRAM_Configure cfg = defaultValue();
+    cfg.loadFormat = tagged Hex "memlines.vmh";
     BRAM1Port#(LineAddr, CacheLine) bram <- mkBRAM1Server(cfg);
     DelayLine#(10, CacheLine) dl <- mkDL(); // Delay by 20 cycles
 

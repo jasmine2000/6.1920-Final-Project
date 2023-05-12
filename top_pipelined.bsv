@@ -1,5 +1,5 @@
 import RVUtil::*;
-import BRAM::*;
+import MainMem::*;
 import pipelined::*;
 import FIFO::*;
 
@@ -12,19 +12,15 @@ import ICache::*;
 import Cache::*;
 
 
+
 module mktop_pipelined(Empty);
     // Instantiate Cache
     ICache cacheInstruction <- mkICache;
     Cache cacheData <- mkCache;
     
     FIFO#(Bit#(1)) memArbiterFifo <- mkFIFO;
-    
-    // Instantiate the dual ported memory
-    BRAM_Configure cfg = defaultValue();
-    cfg.loadFormat = tagged Hex "memlines.vmh";
-    BRAM1Port#(LineAddr, CacheLine) bram <- mkBRAM1Server(cfg);
 
-    
+    MainMem memory <- mkMainMem();
 
     RVIfc rv_core <- mkpipelined;
     Reg#(MainMemReq) ireq <- mkRegU;
@@ -53,11 +49,7 @@ module mktop_pipelined(Empty);
         if (!req.write) memArbiterFifo.enq(1'b0);
         if (debug) $display("Get IReq from Cache ", fshow(req));
         ireq <= req;
-        bram.portA.request.put(BRAMRequest{
-                    write: req.write,
-                    responseOnWrite: False,
-                    address: req.addr,
-                    datain: req.data});
+        memory.put(req);
     endrule
 
     rule responseICacheToProc;
@@ -79,11 +71,7 @@ module mktop_pipelined(Empty);
         if (!req.write) memArbiterFifo.enq(1'b1);
         if (debug) $display("Get DReq from Cache ", fshow(req));
         dreq <= req;
-        bram.portA.request.put(BRAMRequest{
-                    write: req.write,
-                    responseOnWrite: False,
-                    address: req.addr,
-                    datain: req.data});
+        memory.put(req);
     endrule
 
     rule responseDCacheToProc;
@@ -96,7 +84,7 @@ module mktop_pipelined(Empty);
     rule responseMemToCache;
         Bit#(1) isDcacheResp = memArbiterFifo.first();
         memArbiterFifo.deq();
-        let x <- bram.portA.response.get();
+        let x <- memory.get();
         
         if (isDcacheResp=='1)
         begin
