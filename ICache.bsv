@@ -26,8 +26,8 @@ module mkICache(ICache);
   BRAM2Port#(CacheIndex, CacheLine) cache <- mkBRAM2Server(cfg);
   Vector#(128, Ehr#(2, Bit#(19))) tags <- replicateM(mkEhr('hfff));
 
-  // Reg#(LineAddr) currentAddr <- mkReg('hfff);
-  // Reg#(CacheLine) currentLine <- mkReg(unpack('hfff));
+  Reg#(LineAddr) currentAddr <- mkReg('hfff);
+  Reg#(CacheLine) currentLine <- mkReg(unpack('hfff));
 
   Ehr#(3, Maybe#(CacheReq)) currentRequest <- mkEhr(Invalid);
 
@@ -53,16 +53,16 @@ module mkICache(ICache);
 
     if (req.byte_en == 0) begin // load
 
-        // if (currentAddr == {address.tag, address.index}) begin
-        //   let offset = address.blockOffset;
+        if (currentAddr == {address.tag, address.index}) begin
+          let offset = address.blockOffset;
       
-        //   let resp = ICacheResp {i1: currentLine[offset], i2: tagged Invalid};
-        //   if (offset < 15) resp.i2 = tagged Valid currentLine[offset + 1];
+          let resp = ICacheResp {i1: currentLine[offset], i2: tagged Invalid};
+          if (offset < 15) resp.i2 = tagged Valid currentLine[offset + 1];
       
-        //   toProcQueue.enq(resp);
-        //   currentRequest[2] <= tagged Invalid;
+          toProcQueue.enq(resp);
+          currentRequest[2] <= tagged Invalid;
 
-        // end else 
+        end else 
         if (tags[address.index][1] == address.tag) begin // load hit
           if (debug) $display("%x req load hit, %x", req.addr, address.blockOffset);
           // Read Line from BRAM
@@ -146,8 +146,8 @@ module mkICache(ICache);
       cache.portA.request.put(newLine);
       tags[address.index][0] <= address.tag;
 
-      // currentAddr <= {address.tag, address.index};
-      // currentLine <= lineResp;
+      currentAddr <= {address.tag, address.index};
+      currentLine <= lineResp;
 
     end else begin
         $display("illegal write");
