@@ -1,4 +1,5 @@
 import FIFO::*;
+import FIFOF::*;
 import SpecialFIFOs::*;
 import RegFile::*;
 import RVUtil::*;
@@ -56,7 +57,7 @@ typedef struct {
 (* synthesize *)
 module mkpipelined(RVIfc);
     // Interface with memory and devices
-    FIFO#(CacheReq) toImem <- mkBypassFIFO;
+    FIFOF#(CacheReq) toImem <- mkSizedBypassFIFOF(3);
     SupFifo#(Word) fromImem <- mkBypassSupFifo;
     SupFifo#(CacheReq) toDmem <- mkBypassSupFifo;
     SupFifo#(Word) fromDmem <- mkBypassSupFifo;
@@ -70,16 +71,15 @@ module mkpipelined(RVIfc);
     SupFifo#(D2E) d2eQueue <- mkSupFifo;
     SupFifo#(E2W) e2wQueue <- mkSupFifo;
 
-    Ehr#(2, Bool) allowDecode2 <- mkEhr(False);
-    Ehr#(2, Bool) allowExecute2 <- mkEhr(False);
-    Ehr#(2, Bool) allowWriteback2 <- mkEhr(False);
+    Ehr#(3, Bool) allowDecode2 <- mkEhr(False);
+    Ehr#(3, Bool) allowExecute2 <- mkEhr(False);
+    Ehr#(3, Bool) allowWriteback2 <- mkEhr(False);
 
     Ehr#(3, Bit#(1)) epoch <- mkEhr(1'b0);
     Vector#(32, Ehr#(4, Bit#(5))) scoreboard <- replicateM(mkEhr(0));
 
-    Reg#(Bit#(32)) cycles <- mkReg(0);
     Bool debug = False;
-
+    
 	// Code to support Konata visualization
     String dumpFile = "output.log" ;
     let lfh <- mkReg(InvalidFile);
@@ -100,6 +100,12 @@ module mkpipelined(RVIfc);
         end
 		konataTic(lfh);
 	endrule
+
+    rule resetAllow if (!starting);
+        allowDecode2[0] <= False;
+        allowExecute2[0] <= False;
+        allowWriteback2[0] <= False;
+    endrule
 		
     rule fetch if (!starting);
         Bit#(32) pc_fetched = pc[2];
@@ -191,12 +197,12 @@ module mkpipelined(RVIfc);
                 end
             end
 
-            allowDecode2[0] <= True;
+            allowDecode2[1] <= True;
 
-        end else allowDecode2[0] <= False;
+        end else allowDecode2[1] <= False;
     endrule
 
-    rule decode2 if (!starting && allowDecode2[1] == True);
+    rule decode2 if (!starting && allowDecode2[2] == True);
         let from_fetch = f2dQueue.first2();
         let instr = fromImem.first2();
         
@@ -239,8 +245,6 @@ module mkpipelined(RVIfc);
                 end
             end
         end
-
-        allowDecode2[1] <= False;
     endrule
 
     rule execute if (!starting);
@@ -271,7 +275,7 @@ module mkpipelined(RVIfc);
             Bit#(2) offset = addr[1:0];
 
             if (isMemoryInst(dInst)) begin
-                allowExecute2[0] <= False;
+                allowExecute2[1] <= False;
                 // Technical details for load byte/halfword/word
                 let shift_amount = {offset, 3'b0};
                 let byte_en = 0;
@@ -298,11 +302,11 @@ module mkpipelined(RVIfc);
                 end
             end
             else if (isControlInst(dInst)) begin
-                allowExecute2[0] <= True;
+                allowExecute2[1] <= True;
                 labelKonataLeft(lfh,current_id, $format(" Ctrl instr "));
                 data = pc1 + 4;
             end else begin 
-                allowExecute2[0] <= True;
+                allowExecute2[1] <= True;
                 labelKonataLeft(lfh,current_id, $format(" Standard instr "));
             end
 
@@ -327,7 +331,7 @@ module mkpipelined(RVIfc);
             });
 
         end else begin
-            allowExecute2[0] <= True;
+            allowExecute2[1] <= True;
             e2wQueue.enq1(E2W { 
                 dinst: dInst,
                 k_id: from_decode.k_id,
@@ -339,14 +343,12 @@ module mkpipelined(RVIfc);
         end
     endrule
 
-    rule execute2 if (!starting && allowExecute2[1] == True);
+    rule execute2 if (!starting && allowExecute2[2] == True);
         let from_decode = d2eQueue.first2();
         let current_id = from_decode.k_id;
 
         let dInst = from_decode.dinst;
         let fields = getInstFields(dInst.inst);
-
-        allowExecute2[1] <= False;
 
         executeKonata(lfh, current_id);
         labelKonataLeft(lfh,current_id, $format("executing "));
@@ -381,32 +383,6 @@ module mkpipelined(RVIfc);
             let addr = rv1 + imm;
             Bit#(2) offset = addr[1:0];
 
-            // if (isMemoryInst(dInst)) begin
-            //     // Technical details for load byte/halfword/word
-            //     let shift_amount = {offset, 3'b0};
-            //     let byte_en = 0;
-            //     case (size) matches
-            //     2'b00: byte_en = 4'b0001 << offset;
-            //     2'b01: byte_en = 4'b0011 << offset;
-            //     2'b10: byte_en = 4'b1111 << offset;
-            //     endcase
-            //     data = rv2 << shift_amount;
-            //     addr = {addr[31:2], 2'b0};
-            //     isUnsigned = funct3[2];
-            //     let type_mem1 = (dInst.inst[5] == 1) ? byte_en : 0;
-            //     let req = CacheReq {byte_en : type_mem1,
-            //             addr : addr,
-            //             data : data};
-            //     if (isMMIO(addr)) begin 
-            //         if (debug) $display("[Execute] MMIO", fshow(req));
-            //         toMMIO.enq2(req);
-            //         labelKonataLeft(lfh,current_id, $format(" MMIO ", fshow(req)));
-            //         mmio = True;
-            //     end else begin 
-            //         labelKonataLeft(lfh,current_id, $format(" MEM ", fshow(req)));
-            //         toDmem.enq2(req);
-            //     end
-            // end else 
 
             if (isControlInst(dInst)) begin
                 labelKonataLeft(lfh,current_id, $format(" Ctrl instr "));
@@ -452,7 +428,7 @@ module mkpipelined(RVIfc);
         if (from_execute.valid == True) begin
             retired.enq1(current_id);
             if (isMemoryInst(dInst)) begin // (* // write_val *)
-                allowWriteback2[0] <= False;
+                allowWriteback2[1] <= False;
                 let mem_business = from_execute.mem_business;
                 let resp = ?;
                 if (mem_business.mmio) begin 
@@ -471,13 +447,13 @@ module mkpipelined(RVIfc);
                 3'b101 : data = zeroExtend(mem_data[15:0]);
                 3'b010 : data = mem_data;
                 endcase
-            end else allowWriteback2[0] <= True;
+            end else allowWriteback2[1] <= True;
             if(debug) $display("[Writeback]", fshow(dInst));
             if (!dInst.legal) begin
                 if (debug) $display("[Writeback] Illegal Inst, Drop and fault: ", fshow(dInst));
                 // pc <= 0;	// Fault
             end
-        end else allowWriteback2[0] <= True;
+        end else allowWriteback2[1] <= True;
 
 		if (dInst.valid_rd) begin
             let rd_idx = fields.rd;
@@ -489,11 +465,9 @@ module mkpipelined(RVIfc);
 		end
 	endrule
 
-    rule writeback2 if (!starting && allowWriteback2[1] == True);
+    rule writeback2 if (!starting && allowWriteback2[2] == True);
         let from_execute = e2wQueue.first2();
         let dInst = from_execute.dinst;
-
-        allowWriteback2[1] <= False;
 
         if (!isMemoryInst(dInst) || from_execute.valid == False) begin
 
@@ -508,27 +482,6 @@ module mkpipelined(RVIfc);
 
             if (from_execute.valid == True) begin
                 retired.enq2(current_id);
-
-                // if (isMemoryInst(dInst)) begin // (* // write_val *)
-                //     let mem_business = from_execute.mem_business;
-                //     let resp = ?;
-                //     if (mem_business.mmio) begin 
-                //         resp = fromMMIO.first2();
-                //         fromMMIO.deq2();
-                //     end else if (dInst.inst[5] == 0) begin 
-                //         resp = fromDmem.first2();
-                //         fromDmem.deq2();
-                //     end
-                //     let mem_data = resp;
-                //     mem_data = mem_data >> {mem_business.offset ,3'b0};
-                //     case ({pack(mem_business.isUnsigned), mem_business.size}) matches
-                //     3'b000 : data = signExtend(mem_data[7:0]);
-                //     3'b001 : data = signExtend(mem_data[15:0]);
-                //     3'b100 : data = zeroExtend(mem_data[7:0]);
-                //     3'b101 : data = zeroExtend(mem_data[15:0]);
-                //     3'b010 : data = mem_data;
-                //     endcase
-                // end
 
                 if(debug) $display("[Writeback]", fshow(dInst));
                 if (!dInst.legal) begin
