@@ -165,8 +165,8 @@ module mkpipelined(RVIfc);
         let rs2_idx = fields.rs2;
         let rd_idx = fields.rd;
 
-        if (scoreboard[rs1_idx][0] == 0 && 
-            scoreboard[rs2_idx][0] == 0
+        if (scoreboard[rs1_idx][2] == 0 && 
+            scoreboard[rs2_idx][2] == 0
             ) begin // no data hazard
 
             decodeKonata(lfh, from_fetch.k_id);
@@ -175,8 +175,8 @@ module mkpipelined(RVIfc);
             f2dQueue.deq1();
             fromImem.deq1();
 
-            let rs1 = (rs1_idx == 0 ? 0 : rf[rs1_idx][0]);
-            let rs2 = (rs2_idx == 0 ? 0 : rf[rs2_idx][0]);
+            let rs1 = (rs1_idx == 0 ? 0 : rf[rs1_idx][2]);
+            let rs2 = (rs2_idx == 0 ? 0 : rf[rs2_idx][2]);
 
             d2eQueue.enq1(D2E {
                 dinst: decodedInst,
@@ -190,7 +190,7 @@ module mkpipelined(RVIfc);
 
             if (decodedInst.valid_rd) begin
                 if (rd_idx != 0) begin 
-                    scoreboard[rd_idx][0] <= scoreboard[rd_idx][0] + 1;
+                    scoreboard[rd_idx][2] <= scoreboard[rd_idx][2] + 1;
                     if(debug) $display("Stalling %x", rd_idx);
                 end
             end
@@ -213,8 +213,8 @@ module mkpipelined(RVIfc);
         let rs2_idx = fields.rs2;
         let rd_idx = fields.rd;
 
-        if (scoreboard[rs1_idx][1] == 0 && 
-            scoreboard[rs2_idx][1] == 0
+        if (scoreboard[rs1_idx][3] == 0 && 
+            scoreboard[rs2_idx][3] == 0
             ) begin // no data hazard
 
             decodeKonata(lfh, from_fetch.k_id);
@@ -223,8 +223,8 @@ module mkpipelined(RVIfc);
             f2dQueue.deq2();
             fromImem.deq2();
 
-            let rs1 = (rs1_idx == 0 ? 0 : rf[rs1_idx][0]);
-            let rs2 = (rs2_idx == 0 ? 0 : rf[rs2_idx][0]);
+            let rs1 = (rs1_idx == 0 ? 0 : rf[rs1_idx][2]);
+            let rs2 = (rs2_idx == 0 ? 0 : rf[rs2_idx][2]);
 
             d2eQueue.enq2(D2E {
                 dinst: decodedInst,
@@ -238,7 +238,7 @@ module mkpipelined(RVIfc);
 
             if (decodedInst.valid_rd) begin
                 if (rd_idx != 0) begin 
-                    scoreboard[rd_idx][1] <= scoreboard[rd_idx][1] + 1;
+                    scoreboard[rd_idx][3] <= scoreboard[rd_idx][3] + 1;
                     if(debug) $display("Stalling %x", rd_idx);
                 end
             end
@@ -451,8 +451,8 @@ module mkpipelined(RVIfc);
 		if (dInst.valid_rd) begin
             let rd_idx = fields.rd;
             if (rd_idx != 0) begin 
-                if (from_execute.valid == True) rf[rd_idx][1] <= data;
-                scoreboard[rd_idx][2] <= scoreboard[rd_idx][2] - 1;
+                if (from_execute.valid == True) rf[rd_idx][0] <= data;
+                scoreboard[rd_idx][0] <= scoreboard[rd_idx][0] - 1;
                 if(debug) $display("Unstalled %x", rd_idx);
             end
 		end
@@ -487,8 +487,8 @@ module mkpipelined(RVIfc);
             if (dInst.valid_rd) begin
                 let rd_idx = fields.rd;
                 if (rd_idx != 0) begin 
-                    if (from_execute.valid == True) rf[rd_idx][2] <= data;
-                    scoreboard[rd_idx][3] <= scoreboard[rd_idx][3] - 1;
+                    if (from_execute.valid == True) rf[rd_idx][1] <= data;
+                    scoreboard[rd_idx][1] <= scoreboard[rd_idx][1] - 1;
                     if(debug) $display("Unstalled %x", rd_idx);
                 end
             end
