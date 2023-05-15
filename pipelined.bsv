@@ -72,6 +72,7 @@ module mkpipelined(RVIfc);
     SupFifo#(E2W) e2wQueue <- mkSupFifo;
 
     Ehr#(3, Bool) allowDecode2 <- mkEhr(False);
+    Ehr#(3, Bool) allowExecute2 <- mkEhr(False);
     Ehr#(3, Bool) allowWriteback2 <- mkEhr(False);
 
     Ehr#(3, Bit#(1)) epoch <- mkEhr(1'b0);
@@ -102,6 +103,7 @@ module mkpipelined(RVIfc);
 
     rule resetAllow if (!starting);
         allowDecode2[0] <= False;
+        allowExecute2[0] <= False;
         allowWriteback2[0] <= False;
     endrule
 		
@@ -273,6 +275,7 @@ module mkpipelined(RVIfc);
             Bit#(2) offset = addr[1:0];
 
             if (isMemoryInst(dInst)) begin
+                allowExecute2[1] <= False;
                 // Technical details for load byte/halfword/word
                 let shift_amount = {offset, 3'b0};
                 let byte_en = 0;
@@ -301,8 +304,10 @@ module mkpipelined(RVIfc);
             else if (isControlInst(dInst)) begin
                 labelKonataLeft(lfh,current_id, $format(" Ctrl instr "));
                 data = pc1 + 4;
+                allowExecute2[1] <= True;
             end else begin 
                 labelKonataLeft(lfh,current_id, $format(" Standard instr "));
+                allowExecute2[1] <= True;
             end
 
             let controlResult = execControl32(dInst.inst, rv1, rv2, imm, pc1);
@@ -326,6 +331,7 @@ module mkpipelined(RVIfc);
             });
 
         end else begin
+            allowExecute2[1] <= True;
             e2wQueue.enq1(E2W { 
                 dinst: dInst,
                 k_id: from_decode.k_id,
@@ -337,7 +343,7 @@ module mkpipelined(RVIfc);
         end
     endrule
 
-    rule execute2 if (!starting);
+    rule execute2 if (!starting && allowExecute2[2] == True);
         let from_decode = d2eQueue.first2();
         let current_id = from_decode.k_id;
 
